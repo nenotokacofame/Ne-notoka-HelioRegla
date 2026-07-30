@@ -45,7 +45,6 @@ class CirculoLimbo(QGraphicsEllipseItem):
         self.setBrush(QBrush(Qt.NoBrush))
 
         self.setFlag(QGraphicsItem.ItemIsMovable, True)
-        self.setFlag(QGraphicsItem.ItemIsSelectable, True)
         self.setFlag(QGraphicsItem.ItemSendsGeometryChanges, True)
         self.setCursor(Qt.SizeAllCursor)
         self.setZValue(10)

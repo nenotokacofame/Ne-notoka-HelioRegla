@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QSettings, Signal
 from PySide6.QtGui import QAction, QKeySequence, QPixmap
 from detector_limbo import detectar_limbo, ErrorDeteccionLimbo
 from limbo import CirculoLimbo
@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 
 
 NOMBRE_APLICACION = "Ne-notoka HelioRegla"
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 
 
 class VisorSolar(QGraphicsView):
@@ -175,8 +175,21 @@ class VentanaPrincipal(QMainWindow):
         self.resize(1400, 850)
         self.setMinimumSize(1000, 650)
 
-        self.color_limbo = "#39ff88"
-        self.grosor_limbo = 3
+        self.ajustes = QSettings(
+            "Ne-notoka Cofame",
+            "Ne-notoka HelioRegla",
+        )
+
+        self.color_limbo = self.ajustes.value(
+            "contorno/color",
+            "#39ff88",
+            type=str,
+        )
+        self.grosor_limbo = self.ajustes.value(
+            "contorno/grosor",
+            3,
+            type=int,
+        )
         self.modo_ajuste = "Ajuste manual del limbo"
         self.error_limbo_px = None
         self.puntos_limbo = None
@@ -335,10 +348,16 @@ class VentanaPrincipal(QMainWindow):
         self.setStatusBar(estado)
 
     def abrir_imagen(self):
+        ultima_carpeta = self.ajustes.value(
+            "archivos/ultima_carpeta",
+            "",
+            type=str,
+        )
+
         ruta, _ = QFileDialog.getOpenFileName(
             self,
             "Abrir imagen solar",
-            "",
+            ultima_carpeta,
             "Imágenes (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;"
             "Todos los archivos (*)",
         )
@@ -411,6 +430,10 @@ class VentanaPrincipal(QMainWindow):
             return
 
         self.color_limbo = color.name()
+        self.ajustes.setValue(
+            "contorno/color",
+            self.color_limbo,
+        )
         self.boton_color_limbo.setStyleSheet(
             f"border: 2px solid {self.color_limbo};"
         )
@@ -418,6 +441,10 @@ class VentanaPrincipal(QMainWindow):
 
     def cambiar_grosor_limbo(self, grosor):
         self.grosor_limbo = grosor
+        self.ajustes.setValue(
+            "contorno/grosor",
+            self.grosor_limbo,
+        )
         self.aplicar_estilo_limbo()
 
     def aplicar_estilo_limbo(self):
@@ -458,6 +485,10 @@ class VentanaPrincipal(QMainWindow):
 
     def actualizar_informacion(self, ruta):
         archivo = Path(ruta)
+        self.ajustes.setValue(
+            "archivos/ultima_carpeta",
+            str(archivo.parent),
+        )
         pixmap = self.visor.elemento_imagen.pixmap()
 
         self.etiqueta_archivo.setText(
