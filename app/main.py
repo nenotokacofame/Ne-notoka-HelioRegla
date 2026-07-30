@@ -1,8 +1,10 @@
-﻿import sys
+import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QKeySequence, QPixmap
+from limbo import CirculoLimbo
+
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -23,7 +25,7 @@ from PySide6.QtWidgets import (
 
 
 NOMBRE_APLICACION = "Ne-notoka HelioRegla"
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 
 class VisorSolar(QGraphicsView):
@@ -38,6 +40,7 @@ class VisorSolar(QGraphicsView):
         self.elemento_imagen = None
         self.ruta_imagen = None
         self.factor_zoom = 1.0
+        self.circulo_limbo = None
 
         self.setAcceptDrops(True)
         self.setDragMode(QGraphicsView.ScrollHandDrag)
@@ -58,6 +61,7 @@ class VisorSolar(QGraphicsView):
             return False
 
         self.escena.clear()
+        self.circulo_limbo = None
         self.elemento_imagen = QGraphicsPixmapItem(pixmap)
         self.escena.addItem(self.elemento_imagen)
         self.escena.setSceneRect(self.elemento_imagen.boundingRect())
@@ -67,6 +71,36 @@ class VisorSolar(QGraphicsView):
         self.ajustar_ventana()
         self.imagen_cargada.emit(ruta)
         return True
+
+    def crear_ajuste_limbo(self, al_cambiar):
+        if self.elemento_imagen is None:
+            QMessageBox.information(
+                self,
+                "Primero abre una imagen",
+                "Necesitas cargar una fotografía solar antes de ajustar el limbo.",
+            )
+            return
+
+        if self.circulo_limbo is not None:
+            self.escena.removeItem(self.circulo_limbo)
+
+        rectangulo = self.elemento_imagen.boundingRect()
+        centro = rectangulo.center()
+        radio = min(rectangulo.width(), rectangulo.height()) * 0.40
+
+        self.circulo_limbo = CirculoLimbo(
+            centro.x(),
+            centro.y(),
+            radio,
+            al_cambiar,
+        )
+        self.escena.addItem(self.circulo_limbo)
+        self.circulo_limbo.setSelected(True)
+
+    def eliminar_ajuste_limbo(self):
+        if self.circulo_limbo is not None:
+            self.escena.removeItem(self.circulo_limbo)
+            self.circulo_limbo = None
 
     def ajustar_ventana(self):
         if self.elemento_imagen is None:
@@ -176,6 +210,14 @@ class VentanaPrincipal(QMainWindow):
         self.boton_abrir.setObjectName("botonPrincipal")
         self.boton_abrir.clicked.connect(self.abrir_imagen)
 
+        self.boton_limbo = QPushButton("Ajustar limbo solar")
+        self.boton_limbo.setObjectName("botonSecundario")
+        self.boton_limbo.clicked.connect(self.iniciar_ajuste_limbo)
+
+        self.etiqueta_medicion = QLabel("Calibración pendiente")
+        self.etiqueta_medicion.setWordWrap(True)
+        self.etiqueta_medicion.setObjectName("medicion")
+
         self.etiqueta_archivo = QLabel("Ninguna imagen cargada")
         self.etiqueta_archivo.setWordWrap(True)
         self.etiqueta_archivo.setObjectName("informacion")
@@ -207,7 +249,9 @@ class VentanaPrincipal(QMainWindow):
         panel_layout.addWidget(descripcion)
         panel_layout.addSpacing(8)
         panel_layout.addWidget(self.boton_abrir)
+        panel_layout.addWidget(self.boton_limbo)
         panel_layout.addWidget(self.etiqueta_archivo)
+        panel_layout.addWidget(self.etiqueta_medicion)
         panel_layout.addWidget(separador)
         panel_layout.addWidget(proximamente)
         panel_layout.addStretch()
@@ -266,6 +310,26 @@ class VentanaPrincipal(QMainWindow):
 
         if ruta:
             self.visor.cargar_imagen(ruta)
+
+    def iniciar_ajuste_limbo(self):
+        self.visor.crear_ajuste_limbo(self.actualizar_medicion_limbo)
+
+    def actualizar_medicion_limbo(self, centro_x, centro_y, radio):
+        diametro = radio * 2
+        km_por_pixel = 1_391_400 / diametro
+
+        self.etiqueta_medicion.setText(
+            "Ajuste manual del limbo\n"
+            f"Centro: {centro_x:.1f}, {centro_y:.1f} px\n"
+            f"Radio: {radio:.1f} px\n"
+            f"Diámetro: {diametro:.1f} px\n"
+            f"Escala: {km_por_pixel:,.1f} km/px"
+        )
+
+        self.statusBar().showMessage(
+            f"Diámetro solar: {diametro:.1f} px · "
+            f"Escala provisional: {km_por_pixel:,.1f} km/px"
+        )
 
     def actualizar_informacion(self, ruta):
         archivo = Path(ruta)
@@ -344,6 +408,27 @@ class VentanaPrincipal(QMainWindow):
 
             #botonPrincipal:hover {
                 background-color: #f5b041;
+            }
+
+            #botonSecundario {
+                background-color: #243342;
+                color: #f5b041;
+                border: 1px solid #d68910;
+                padding: 10px;
+                border-radius: 6px;
+                font-weight: 600;
+            }
+
+            #botonSecundario:hover {
+                background-color: #30465a;
+            }
+
+            #medicion {
+                background-color: #111820;
+                color: #d8e6f0;
+                border: 1px solid #34495e;
+                border-radius: 5px;
+                padding: 9px;
             }
 
             #proximamente {
