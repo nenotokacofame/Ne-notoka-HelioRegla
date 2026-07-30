@@ -7,6 +7,7 @@ from limbo import CirculoLimbo
 
 from PySide6.QtWidgets import (
     QApplication,
+    QColorDialog,
     QFileDialog,
     QFrame,
     QGraphicsPixmapItem,
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QSpinBox,
     QStatusBar,
     QToolBar,
     QVBoxLayout,
@@ -25,7 +27,7 @@ from PySide6.QtWidgets import (
 
 
 NOMBRE_APLICACION = "Ne-notoka HelioRegla"
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 
 
 class VisorSolar(QGraphicsView):
@@ -77,7 +79,7 @@ class VisorSolar(QGraphicsView):
             QMessageBox.information(
                 self,
                 "Primero abre una imagen",
-                "Necesitas cargar una fotografía solar antes de ajustar el limbo.",
+                "Necesitas cargar una fotografÃ­a solar antes de ajustar el limbo.",
             )
             return
 
@@ -95,7 +97,7 @@ class VisorSolar(QGraphicsView):
             al_cambiar,
         )
         self.escena.addItem(self.circulo_limbo)
-        self.circulo_limbo.setSelected(True)
+        self.circulo_limbo.establecer_estilo("#39ff88", 3)
 
     def eliminar_ajuste_limbo(self):
         if self.circulo_limbo is not None:
@@ -168,9 +170,12 @@ class VentanaPrincipal(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle(f"{NOMBRE_APLICACION} — {VERSION}")
+        self.setWindowTitle(f"{NOMBRE_APLICACION} â€” {VERSION}")
         self.resize(1400, 850)
         self.setMinimumSize(1000, 650)
+
+        self.color_limbo = "#39ff88"
+        self.grosor_limbo = 3
 
         self.visor = VisorSolar()
         self.visor.imagen_cargada.connect(self.actualizar_informacion)
@@ -201,7 +206,7 @@ class VentanaPrincipal(QMainWindow):
         subtitulo.setObjectName("nombreAplicacion")
 
         descripcion = QLabel(
-            "Medición, comparación y etiquetado de imágenes solares."
+            "MediciÃ³n, comparaciÃ³n y etiquetado de imÃ¡genes solares."
         )
         descripcion.setWordWrap(True)
         descripcion.setObjectName("descripcion")
@@ -214,7 +219,18 @@ class VentanaPrincipal(QMainWindow):
         self.boton_limbo.setObjectName("botonSecundario")
         self.boton_limbo.clicked.connect(self.iniciar_ajuste_limbo)
 
-        self.etiqueta_medicion = QLabel("Calibración pendiente")
+        self.boton_color_limbo = QPushButton("Color del contorno")
+        self.boton_color_limbo.setObjectName("botonColor")
+        self.boton_color_limbo.clicked.connect(self.seleccionar_color_limbo)
+
+        self.selector_grosor = QSpinBox()
+        self.selector_grosor.setRange(1, 10)
+        self.selector_grosor.setValue(self.grosor_limbo)
+        self.selector_grosor.setSuffix(" px")
+        self.selector_grosor.setToolTip("Grosor del contorno del limbo")
+        self.selector_grosor.valueChanged.connect(self.cambiar_grosor_limbo)
+
+        self.etiqueta_medicion = QLabel("CalibraciÃ³n pendiente")
         self.etiqueta_medicion.setWordWrap(True)
         self.etiqueta_medicion.setObjectName("medicion")
 
@@ -227,12 +243,12 @@ class VentanaPrincipal(QMainWindow):
         separador.setObjectName("separador")
 
         proximamente = QLabel(
-            "Próximas herramientas\n\n"
-            "○ Ajuste del limbo\n"
-            "↔ Regla solar\n"
-            "⌖ Medición de estructuras\n"
-            "● Comparación planetaria\n"
-            "🏷 Etiquetado de regiones"
+            "PrÃ³ximas herramientas\n\n"
+            "â—‹ Ajuste del limbo\n"
+            "â†” Regla solar\n"
+            "âŒ– MediciÃ³n de estructuras\n"
+            "â— ComparaciÃ³n planetaria\n"
+            "ðŸ· Etiquetado de regiones"
         )
         proximamente.setObjectName("proximamente")
         proximamente.setWordWrap(True)
@@ -240,7 +256,7 @@ class VentanaPrincipal(QMainWindow):
         ayuda = QLabel(
             "Rueda: zoom\n"
             "Arrastrar: desplazar\n"
-            "También puedes soltar una imagen."
+            "TambiÃ©n puedes soltar una imagen."
         )
         ayuda.setObjectName("ayuda")
 
@@ -250,6 +266,13 @@ class VentanaPrincipal(QMainWindow):
         panel_layout.addSpacing(8)
         panel_layout.addWidget(self.boton_abrir)
         panel_layout.addWidget(self.boton_limbo)
+
+        fila_estilo = QHBoxLayout()
+        fila_estilo.setSpacing(8)
+        fila_estilo.addWidget(self.boton_color_limbo, 1)
+        fila_estilo.addWidget(self.selector_grosor)
+        panel_layout.addLayout(fila_estilo)
+
         panel_layout.addWidget(self.etiqueta_archivo)
         panel_layout.addWidget(self.etiqueta_medicion)
         panel_layout.addWidget(separador)
@@ -261,7 +284,7 @@ class VentanaPrincipal(QMainWindow):
         zona_layout = QVBoxLayout(zona_visor)
         zona_layout.setContentsMargins(18, 18, 18, 18)
 
-        encabezado = QLabel("Área de trabajo solar")
+        encabezado = QLabel("Ãrea de trabajo solar")
         encabezado.setObjectName("encabezado")
 
         zona_layout.addWidget(encabezado)
@@ -285,7 +308,7 @@ class VentanaPrincipal(QMainWindow):
         accion_ajustar.setShortcut("F")
         accion_ajustar.triggered.connect(self.visor.ajustar_ventana)
 
-        accion_real = QAction("Tamaño real", self)
+        accion_real = QAction("TamaÃ±o real", self)
         accion_real.setShortcut("1")
         accion_real.triggered.connect(self.visor.tamano_real)
 
@@ -304,7 +327,7 @@ class VentanaPrincipal(QMainWindow):
             self,
             "Abrir imagen solar",
             "",
-            "Imágenes (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;"
+            "ImÃ¡genes (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;"
             "Todos los archivos (*)",
         )
 
@@ -313,6 +336,36 @@ class VentanaPrincipal(QMainWindow):
 
     def iniciar_ajuste_limbo(self):
         self.visor.crear_ajuste_limbo(self.actualizar_medicion_limbo)
+        self.aplicar_estilo_limbo()
+
+    def seleccionar_color_limbo(self):
+        color = QColorDialog.getColor(
+            self.color_limbo,
+            self,
+            "Seleccionar color del contorno",
+        )
+
+        if not color.isValid():
+            return
+
+        self.color_limbo = color.name()
+        self.boton_color_limbo.setStyleSheet(
+            f"border: 2px solid {self.color_limbo};"
+        )
+        self.aplicar_estilo_limbo()
+
+    def cambiar_grosor_limbo(self, grosor):
+        self.grosor_limbo = grosor
+        self.aplicar_estilo_limbo()
+
+    def aplicar_estilo_limbo(self):
+        circulo = self.visor.circulo_limbo
+
+        if circulo is not None:
+            circulo.establecer_estilo(
+                self.color_limbo,
+                self.grosor_limbo,
+            )
 
     def actualizar_medicion_limbo(self, centro_x, centro_y, radio):
         diametro = radio * 2
@@ -322,12 +375,12 @@ class VentanaPrincipal(QMainWindow):
             "Ajuste manual del limbo\n"
             f"Centro: {centro_x:.1f}, {centro_y:.1f} px\n"
             f"Radio: {radio:.1f} px\n"
-            f"Diámetro: {diametro:.1f} px\n"
+            f"DiÃ¡metro: {diametro:.1f} px\n"
             f"Escala: {km_por_pixel:,.1f} km/px"
         )
 
         self.statusBar().showMessage(
-            f"Diámetro solar: {diametro:.1f} px · "
+            f"DiÃ¡metro solar: {diametro:.1f} px Â· "
             f"Escala provisional: {km_por_pixel:,.1f} km/px"
         )
 
@@ -337,7 +390,7 @@ class VentanaPrincipal(QMainWindow):
 
         self.etiqueta_archivo.setText(
             f"{archivo.name}\n"
-            f"{pixmap.width()} × {pixmap.height()} píxeles"
+            f"{pixmap.width()} Ã— {pixmap.height()} pÃ­xeles"
         )
         self.statusBar().showMessage(f"Imagen cargada: {archivo.name}")
 
@@ -423,6 +476,23 @@ class VentanaPrincipal(QMainWindow):
                 background-color: #30465a;
             }
 
+            #botonColor {
+                background-color: #243342;
+                color: #d8e6f0;
+                border: 2px solid #39ff88;
+                padding: 7px;
+                border-radius: 5px;
+            }
+
+            QSpinBox {
+                background-color: #111820;
+                color: #ffffff;
+                border: 1px solid #44596c;
+                border-radius: 5px;
+                padding: 6px;
+                min-width: 62px;
+            }
+
             #medicion {
                 background-color: #111820;
                 color: #d8e6f0;
@@ -469,3 +539,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -1,4 +1,4 @@
-﻿from math import hypot
+from math import hypot
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QBrush, QColor, QPen
@@ -36,7 +36,10 @@ class CirculoLimbo(QGraphicsEllipseItem):
         self.radio = float(radio)
         self.al_cambiar = al_cambiar
 
-        lapiz = QPen(QColor("#f5b041"), 2)
+        self.color_linea = "#39ff88"
+        self.grosor_linea = 3
+
+        lapiz = QPen(QColor(self.color_linea), self.grosor_linea)
         lapiz.setCosmetic(True)
         self.setPen(lapiz)
         self.setBrush(QBrush(Qt.NoBrush))
@@ -52,6 +55,14 @@ class CirculoLimbo(QGraphicsEllipseItem):
         self.establecer_radio(radio, notificar=False)
         self.setPos(centro_x, centro_y)
         self.notificar_cambio()
+
+    def establecer_estilo(self, color, grosor):
+        self.color_linea = color
+        self.grosor_linea = grosor
+
+        lapiz = QPen(QColor(color), grosor)
+        lapiz.setCosmetic(True)
+        self.setPen(lapiz)
 
     def establecer_radio(self, radio, notificar=True):
         radio = max(10.0, float(radio))
