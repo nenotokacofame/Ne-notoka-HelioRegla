@@ -2,7 +2,14 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QSettings, Signal
-from PySide6.QtGui import QAction, QKeySequence, QPixmap
+from PySide6.QtGui import (
+    QAction,
+    QColor,
+    QKeySequence,
+    QPen,
+    QPixmap,
+)
+from ajuste_parcial import ajustar_limbo_parcial
 from detector_limbo import detectar_limbo, ErrorDeteccionLimbo
 from limbo import CirculoLimbo
 
@@ -11,6 +18,7 @@ from PySide6.QtWidgets import (
     QColorDialog,
     QFileDialog,
     QFrame,
+    QGraphicsEllipseItem,
     QGraphicsPixmapItem,
     QGraphicsScene,
     QGraphicsView,
@@ -28,7 +36,7 @@ from PySide6.QtWidgets import (
 
 
 NOMBRE_APLICACION = "Ne-notoka HelioRegla"
-VERSION = "0.3.1"
+VERSION = "0.4.0"
 
 
 class VisorSolar(QGraphicsView):
@@ -44,6 +52,12 @@ class VisorSolar(QGraphicsView):
         self.ruta_imagen = None
         self.factor_zoom = 1.0
         self.circulo_limbo = None
+        self.modo_limbo_parcial = False
+        self.puntos_limbo_parcial = []
+        self.marcas_limbo_parcial = []
+        self.previsualizacion_parcial = None
+        self.resultado_parcial = None
+        self.callback_parcial = None
 
         self.setAcceptDrops(True)
         self.setDragMode(QGraphicsView.ScrollHandDrag)
@@ -104,6 +118,187 @@ class VisorSolar(QGraphicsView):
         if self.circulo_limbo is not None:
             self.escena.removeItem(self.circulo_limbo)
             self.circulo_limbo = None
+
+    def iniciar_limbo_parcial(self, callback):
+        if self.elemento_imagen is None:
+            QMessageBox.information(
+                self,
+                "Primero abre una imagen",
+                "Necesitas cargar una fotografía del limbo solar.",
+            )
+            return False
+
+        self.cancelar_limbo_parcial()
+        self.eliminar_ajuste_limbo()
+
+        self.modo_limbo_parcial = True
+        self.callback_parcial = callback
+        self.setDragMode(QGraphicsView.NoDrag)
+        self.setCursor(Qt.CrossCursor)
+        return True
+
+    def agregar_punto_parcial(self, posicion):
+        marca = QGraphicsEllipseItem(-5, -5, 10, 10)
+        marca.setPos(posicion)
+        marca.setBrush(QColor("#00e5ff"))
+
+        lapiz = QPen(QColor("#ffffff"), 1)
+        lapiz.setCosmetic(True)
+        marca.setPen(lapiz)
+        marca.setFlag(
+            QGraphicsEllipseItem.ItemIgnoresTransformations,
+            True,
+        )
+        marca.setZValue(30)
+
+        self.escena.addItem(marca)
+        self.marcas_limbo_parcial.append(marca)
+        self.puntos_limbo_parcial.append(
+            (posicion.x(), posicion.y())
+        )
+        self.recalcular_limbo_parcial()
+
+    def eliminar_punto_parcial(self, posicion):
+        if not self.puntos_limbo_parcial:
+            return
+
+        escala = max(abs(self.transform().m11()), 0.001)
+        tolerancia = 18 / escala
+
+        distancias = [
+            (
+                (x - posicion.x()) ** 2
+                + (y - posicion.y()) ** 2
+            ) ** 0.5
+            for x, y in self.puntos_limbo_parcial
+        ]
+        indice = min(
+            range(len(distancias)),
+            key=distancias.__getitem__,
+        )
+
+        if distancias[indice] > tolerancia:
+            return
+
+        marca = self.marcas_limbo_parcial.pop(indice)
+        self.escena.removeItem(marca)
+        self.puntos_limbo_parcial.pop(indice)
+        self.recalcular_limbo_parcial()
+
+    def recalcular_limbo_parcial(self):
+        if self.previsualizacion_parcial is not None:
+            self.escena.removeItem(
+                self.previsualizacion_parcial
+            )
+            self.previsualizacion_parcial = None
+
+        self.resultado_parcial = None
+
+        if len(self.puntos_limbo_parcial) < 3:
+            if self.callback_parcial:
+                self.callback_parcial(None)
+            return
+
+        try:
+            resultado = ajustar_limbo_parcial(
+                self.puntos_limbo_parcial
+            )
+        except ValueError:
+            if self.callback_parcial:
+                self.callback_parcial(None)
+            return
+
+        self.resultado_parcial = resultado
+
+        circulo = QGraphicsEllipseItem(
+            -resultado.radio,
+            -resultado.radio,
+            resultado.radio * 2,
+            resultado.radio * 2,
+        )
+        circulo.setPos(
+            resultado.centro_x,
+            resultado.centro_y,
+        )
+
+        lapiz = QPen(QColor("#00e5ff"), 2)
+        lapiz.setCosmetic(True)
+        lapiz.setStyle(Qt.DashLine)
+        circulo.setPen(lapiz)
+        circulo.setZValue(20)
+
+        self.escena.addItem(circulo)
+        self.previsualizacion_parcial = circulo
+
+        if self.callback_parcial:
+            self.callback_parcial(resultado)
+
+    def finalizar_limbo_parcial(self, al_cambiar):
+        resultado = self.resultado_parcial
+
+        if resultado is None:
+            QMessageBox.information(
+                self,
+                "Faltan puntos",
+                "Marca al menos tres puntos bien separados "
+                "sobre el limbo.",
+            )
+            return None
+
+        self.limpiar_marcas_parciales()
+        self.modo_limbo_parcial = False
+        self.setDragMode(QGraphicsView.ScrollHandDrag)
+        self.unsetCursor()
+
+        self.circulo_limbo = CirculoLimbo(
+            resultado.centro_x,
+            resultado.centro_y,
+            resultado.radio,
+            al_cambiar,
+        )
+        self.escena.addItem(self.circulo_limbo)
+
+        return resultado
+
+    def limpiar_marcas_parciales(self):
+        for marca in self.marcas_limbo_parcial:
+            self.escena.removeItem(marca)
+
+        self.marcas_limbo_parcial.clear()
+        self.puntos_limbo_parcial.clear()
+
+        if self.previsualizacion_parcial is not None:
+            self.escena.removeItem(
+                self.previsualizacion_parcial
+            )
+            self.previsualizacion_parcial = None
+
+    def cancelar_limbo_parcial(self):
+        self.limpiar_marcas_parciales()
+        self.resultado_parcial = None
+        self.modo_limbo_parcial = False
+        self.callback_parcial = None
+        self.setDragMode(QGraphicsView.ScrollHandDrag)
+        self.unsetCursor()
+
+    def mousePressEvent(self, event):
+        if not self.modo_limbo_parcial:
+            super().mousePressEvent(event)
+            return
+
+        posicion = self.mapToScene(event.position().toPoint())
+
+        if event.button() == Qt.LeftButton:
+            self.agregar_punto_parcial(posicion)
+            event.accept()
+            return
+
+        if event.button() == Qt.RightButton:
+            self.eliminar_punto_parcial(posicion)
+            event.accept()
+            return
+
+        super().mousePressEvent(event)
 
     def ajustar_ventana(self):
         if self.elemento_imagen is None:
@@ -192,6 +387,7 @@ class VentanaPrincipal(QMainWindow):
         )
         self.modo_ajuste = "Ajuste manual del limbo"
         self.error_limbo_px = None
+        self.incertidumbre_radio_px = None
         self.puntos_limbo = None
 
         self.visor = VisorSolar()
@@ -242,6 +438,26 @@ class VentanaPrincipal(QMainWindow):
             self.iniciar_autodeteccion_limbo
         )
 
+        self.boton_parcial = QPushButton("Limbo parcial por puntos")
+        self.boton_parcial.setObjectName("botonSecundario")
+        self.boton_parcial.clicked.connect(
+            self.iniciar_ajuste_parcial
+        )
+
+        self.boton_finalizar_parcial = QPushButton(
+            "Finalizar ajuste parcial"
+        )
+        self.boton_finalizar_parcial.clicked.connect(
+            self.finalizar_ajuste_parcial
+        )
+        self.boton_finalizar_parcial.setVisible(False)
+
+        self.boton_cancelar_parcial = QPushButton("Cancelar puntos")
+        self.boton_cancelar_parcial.clicked.connect(
+            self.cancelar_ajuste_parcial
+        )
+        self.boton_cancelar_parcial.setVisible(False)
+
         self.boton_color_limbo = QPushButton("Color del contorno")
         self.boton_color_limbo.setObjectName("botonColor")
         self.boton_color_limbo.clicked.connect(self.seleccionar_color_limbo)
@@ -291,6 +507,9 @@ class VentanaPrincipal(QMainWindow):
         panel_layout.addWidget(self.boton_abrir)
         panel_layout.addWidget(self.boton_limbo)
         panel_layout.addWidget(self.boton_autodetectar)
+        panel_layout.addWidget(self.boton_parcial)
+        panel_layout.addWidget(self.boton_finalizar_parcial)
+        panel_layout.addWidget(self.boton_cancelar_parcial)
 
         fila_estilo = QHBoxLayout()
         fila_estilo.setSpacing(8)
@@ -365,9 +584,93 @@ class VentanaPrincipal(QMainWindow):
         if ruta:
             self.visor.cargar_imagen(ruta)
 
+    def iniciar_ajuste_parcial(self):
+        if not self.visor.iniciar_limbo_parcial(
+            self.actualizar_info_parcial
+        ):
+            return
+
+        self.boton_finalizar_parcial.setVisible(True)
+        self.boton_cancelar_parcial.setVisible(True)
+        self.etiqueta_medicion.setText(
+            "Ajuste de limbo parcial\n"
+            "Clic izquierdo: añadir punto\n"
+            "Clic derecho: eliminar punto\n"
+            "Marca al menos 5 puntos sobre el arco."
+        )
+        self.statusBar().showMessage(
+            "Marca puntos distribuidos sobre el limbo visible"
+        )
+
+    def actualizar_info_parcial(self, resultado):
+        if resultado is None:
+            cantidad = len(
+                self.visor.puntos_limbo_parcial
+            )
+            self.etiqueta_medicion.setText(
+                "Ajuste de limbo parcial\n"
+                f"Puntos marcados: {cantidad}\n"
+                "Se necesitan al menos 3 puntos."
+            )
+            return
+
+        cobertura = resultado.cobertura_grados
+        incertidumbre = resultado.incertidumbre_radio_px
+
+        if cobertura < 45:
+            calidad = "Muy baja: amplía el arco marcado"
+        elif cobertura < 90:
+            calidad = "Limitada"
+        elif cobertura < 180:
+            calidad = "Buena"
+        else:
+            calidad = "Excelente"
+
+        self.etiqueta_medicion.setText(
+            "Previsualización del limbo parcial\n"
+            f"Puntos: {resultado.puntos_usados}\n"
+            f"Cobertura: {cobertura:.1f}°\n"
+            f"Radio: {resultado.radio:.1f} px\n"
+            f"Residuo: ±{resultado.residuo_px:.2f} px\n"
+            f"Incertidumbre radio: ±{incertidumbre:.1f} px\n"
+            f"Calidad geométrica: {calidad}"
+        )
+
+    def finalizar_ajuste_parcial(self):
+        resultado = self.visor.finalizar_limbo_parcial(
+            self.actualizar_medicion_limbo
+        )
+
+        if resultado is None:
+            return
+
+        self.modo_ajuste = "Limbo parcial ajustado por puntos"
+        self.error_limbo_px = resultado.residuo_px
+        self.incertidumbre_radio_px = (
+            resultado.incertidumbre_radio_px
+        )
+        self.puntos_limbo = resultado.puntos_usados
+        self.aplicar_estilo_limbo()
+        self.actualizar_medicion_limbo(
+            resultado.centro_x,
+            resultado.centro_y,
+            resultado.radio,
+        )
+
+        self.boton_finalizar_parcial.setVisible(False)
+        self.boton_cancelar_parcial.setVisible(False)
+
+    def cancelar_ajuste_parcial(self):
+        self.visor.cancelar_limbo_parcial()
+        self.boton_finalizar_parcial.setVisible(False)
+        self.boton_cancelar_parcial.setVisible(False)
+        self.etiqueta_medicion.setText("Calibración pendiente")
+        self.statusBar().showMessage("Ajuste parcial cancelado")
+
     def iniciar_ajuste_limbo(self):
         self.modo_ajuste = "Ajuste manual del limbo"
         self.error_limbo_px = None
+        self.incertidumbre_radio_px = None
         self.puntos_limbo = None
         self.visor.crear_ajuste_limbo(self.actualizar_medicion_limbo)
         self.aplicar_estilo_limbo()
@@ -406,6 +709,7 @@ class VentanaPrincipal(QMainWindow):
 
         self.modo_ajuste = "Limbo detectado automáticamente"
         self.error_limbo_px = resultado.error_px
+        self.incertidumbre_radio_px = None
         self.puntos_limbo = resultado.puntos_usados
 
         self.visor.circulo_limbo = CirculoLimbo(
@@ -467,6 +771,20 @@ class VentanaPrincipal(QMainWindow):
             detalle_error = (
                 f"\nResiduo: ±{self.error_limbo_px:.2f} px"
                 f" (±{error_km:,.0f} km)"
+            )
+
+            if self.incertidumbre_radio_px is not None:
+                incertidumbre_km = (
+                    self.incertidumbre_radio_px
+                    * km_por_pixel
+                )
+                detalle_error += (
+                    f"\nIncertidumbre del radio: "
+                    f"±{self.incertidumbre_radio_px:.2f} px"
+                    f" (±{incertidumbre_km:,.0f} km)"
+                )
+
+            detalle_error += (
                 f"\nPuntos usados: {self.puntos_limbo}"
             )
 
