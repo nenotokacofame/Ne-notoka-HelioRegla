@@ -15,6 +15,7 @@ from calibracion import DialogoCalibracion
 from detector_limbo import detectar_limbo, ErrorDeteccionLimbo
 from limbo import CirculoLimbo
 from mediciones import MedicionProtuberancia
+from regla_solar import ReglaSolar
 
 from PySide6.QtWidgets import (
     QApplication,
@@ -43,7 +44,7 @@ NOMBRE_APLICACION = "Ne-notoka HelioRegla"
 RUTA_PROYECTO = Path(__file__).resolve().parent.parent
 RUTA_LOGO = RUTA_PROYECTO / "assets" / "logo_ne_notoka.png"
 RUTA_ICONO = RUTA_PROYECTO / "assets" / "icono_ne_notoka.ico"
-VERSION = "0.9.1"
+VERSION = "0.10.0"
 
 
 class VisorSolar(QGraphicsView):
@@ -417,6 +418,33 @@ class VentanaPrincipal(QMainWindow):
         self.escala_equipo_km = None
         self.descripcion_calibracion = None
         self.muestras_circulos = []
+        self.regla_solar = None
+
+        self.intervalo_regla = self.ajustes.value(
+            "regla/intervalo_km",
+            25_000,
+            type=int,
+        )
+        self.maximo_regla = self.ajustes.value(
+            "regla/maximo_km",
+            200_000,
+            type=int,
+        )
+        self.color_regla = self.ajustes.value(
+            "regla/color",
+            "#00A6C8",
+            type=str,
+        )
+        self.grosor_regla = self.ajustes.value(
+            "regla/grosor",
+            1,
+            type=int,
+        )
+        self.tamano_regla = self.ajustes.value(
+            "regla/tamano_texto",
+            18,
+            type=int,
+        )
 
         self.color_anotaciones = self.ajustes.value(
             "anotaciones/color",
@@ -544,6 +572,96 @@ class VentanaPrincipal(QMainWindow):
             self.borrar_mediciones
         )
 
+        self.boton_regla = QPushButton("Mostrar regla solar")
+        self.boton_regla.setObjectName("botonPrincipal")
+        self.boton_regla.clicked.connect(
+            self.alternar_regla_solar
+        )
+
+        self.selector_intervalo_regla = QComboBox()
+
+        for valor in (10_000, 25_000, 50_000, 100_000):
+            self.selector_intervalo_regla.addItem(
+                f"Cada {valor // 1000} mil km",
+                valor,
+            )
+
+        indice = self.selector_intervalo_regla.findData(
+            self.intervalo_regla
+        )
+        self.selector_intervalo_regla.setCurrentIndex(
+            max(0, indice)
+        )
+        self.selector_intervalo_regla.currentIndexChanged.connect(
+            self.cambiar_configuracion_regla
+        )
+
+        self.selector_maximo_regla = QComboBox()
+
+        for valor in (
+            50_000,
+            100_000,
+            150_000,
+            200_000,
+            300_000,
+            500_000,
+        ):
+            self.selector_maximo_regla.addItem(
+                f"Hasta {valor // 1000} mil km",
+                valor,
+            )
+
+        indice = self.selector_maximo_regla.findData(
+            self.maximo_regla
+        )
+        self.selector_maximo_regla.setCurrentIndex(
+            max(0, indice)
+        )
+        self.selector_maximo_regla.currentIndexChanged.connect(
+            self.cambiar_configuracion_regla
+        )
+
+        self.boton_color_regla = QPushButton("Color de regla")
+        self.boton_color_regla.clicked.connect(
+            self.seleccionar_color_regla
+        )
+        self.boton_color_regla.setStyleSheet(
+            f"border: 2px solid {self.color_regla};"
+        )
+
+        self.selector_grosor_regla = QComboBox()
+
+        for grosor in range(1, 6):
+            self.selector_grosor_regla.addItem(
+                f"Línea {grosor} px",
+                grosor,
+            )
+
+        self.selector_grosor_regla.setCurrentIndex(
+            max(0, self.grosor_regla - 1)
+        )
+        self.selector_grosor_regla.currentIndexChanged.connect(
+            self.cambiar_configuracion_regla
+        )
+
+        self.selector_tamano_regla = QComboBox()
+
+        for tamano in (12, 16, 18, 20, 24, 28, 32):
+            self.selector_tamano_regla.addItem(
+                f"Texto {tamano} px",
+                tamano,
+            )
+
+        indice = self.selector_tamano_regla.findData(
+            self.tamano_regla
+        )
+        self.selector_tamano_regla.setCurrentIndex(
+            max(0, indice)
+        )
+        self.selector_tamano_regla.currentIndexChanged.connect(
+            self.cambiar_configuracion_regla
+        )
+
         self.boton_color_anotaciones = QPushButton(
             "Color de anotaciones"
         )
@@ -652,6 +770,20 @@ class VentanaPrincipal(QMainWindow):
         panel_layout.addWidget(self.boton_calibracion)
         panel_layout.addWidget(self.boton_protuberancia)
         panel_layout.addWidget(self.boton_borrar_mediciones)
+        panel_layout.addWidget(self.boton_regla)
+
+        fila_regla_1 = QHBoxLayout()
+        fila_regla_1.setSpacing(8)
+        fila_regla_1.addWidget(self.selector_intervalo_regla)
+        fila_regla_1.addWidget(self.selector_maximo_regla)
+        panel_layout.addLayout(fila_regla_1)
+
+        fila_regla_2 = QHBoxLayout()
+        fila_regla_2.setSpacing(8)
+        fila_regla_2.addWidget(self.boton_color_regla)
+        fila_regla_2.addWidget(self.selector_grosor_regla)
+        fila_regla_2.addWidget(self.selector_tamano_regla)
+        panel_layout.addLayout(fila_regla_2)
 
         fila_anotaciones = QHBoxLayout()
         fila_anotaciones.setSpacing(8)
@@ -755,6 +887,122 @@ class VentanaPrincipal(QMainWindow):
 
         if ruta:
             self.visor.cargar_imagen(ruta)
+
+    def alternar_regla_solar(self):
+        if self.regla_solar is not None:
+            self.regla_solar.eliminar()
+            self.regla_solar = None
+            self.boton_regla.setText("Mostrar regla solar")
+            self.statusBar().showMessage("Regla solar oculta")
+            return
+
+        circulo = self.visor.circulo_limbo
+
+        if circulo is None:
+            QMessageBox.information(
+                self,
+                "Primero ajusta el limbo",
+                "La regla solar necesita un círculo de "
+                "referencia antes de mostrarse.",
+            )
+            return
+
+        self.regla_solar = ReglaSolar(
+            self.visor.escena,
+            self.intervalo_regla,
+            self.maximo_regla,
+            self.color_regla,
+            self.grosor_regla,
+            self.tamano_regla,
+        )
+        self.boton_regla.setText("Ocultar regla solar")
+        self.actualizar_regla_solar()
+        self.statusBar().showMessage("Regla solar visible")
+
+    def seleccionar_color_regla(self):
+        color = QColorDialog.getColor(
+            self.color_regla,
+            self,
+            "Seleccionar color de la regla solar",
+        )
+
+        if not color.isValid():
+            return
+
+        self.color_regla = color.name()
+        self.ajustes.setValue(
+            "regla/color",
+            self.color_regla,
+        )
+        self.boton_color_regla.setStyleSheet(
+            f"border: 2px solid {self.color_regla};"
+        )
+        self.cambiar_configuracion_regla()
+
+    def cambiar_configuracion_regla(self, indice=None):
+        intervalo = self.selector_intervalo_regla.currentData()
+        maximo = self.selector_maximo_regla.currentData()
+        grosor = self.selector_grosor_regla.currentData()
+        tamano = self.selector_tamano_regla.currentData()
+
+        if None in (intervalo, maximo, grosor, tamano):
+            return
+
+        self.intervalo_regla = int(intervalo)
+        self.maximo_regla = int(maximo)
+        self.grosor_regla = int(grosor)
+        self.tamano_regla = int(tamano)
+
+        self.ajustes.setValue(
+            "regla/intervalo_km",
+            self.intervalo_regla,
+        )
+        self.ajustes.setValue(
+            "regla/maximo_km",
+            self.maximo_regla,
+        )
+        self.ajustes.setValue(
+            "regla/grosor",
+            self.grosor_regla,
+        )
+        self.ajustes.setValue(
+            "regla/tamano_texto",
+            self.tamano_regla,
+        )
+
+        if self.regla_solar is not None:
+            self.regla_solar.establecer_configuracion(
+                self.intervalo_regla,
+                self.maximo_regla,
+                self.color_regla,
+                self.grosor_regla,
+                self.tamano_regla,
+            )
+            self.actualizar_regla_solar()
+
+    def actualizar_regla_solar(self):
+        if (
+            self.regla_solar is None
+            or self.visor.circulo_limbo is None
+            or self.visor.elemento_imagen is None
+        ):
+            return
+
+        circulo = self.visor.circulo_limbo
+        escala_limbo = 1_391_400 / (circulo.radio * 2)
+        escala = (
+            self.escala_equipo_km
+            if self.escala_equipo_km is not None
+            else escala_limbo
+        )
+
+        self.regla_solar.actualizar(
+            circulo.pos().x(),
+            circulo.pos().y(),
+            circulo.radio,
+            escala,
+            self.visor.elemento_imagen.boundingRect(),
+        )
 
     def seleccionar_color_anotaciones(self):
         color = QColorDialog.getColor(
@@ -1211,6 +1459,8 @@ class VentanaPrincipal(QMainWindow):
             medicion.km_por_pixel = km_por_pixel
             medicion.recalcular_desde_limbo()
 
+        self.actualizar_regla_solar()
+
         detalle_error = ""
 
         if self.error_limbo_px is not None:
@@ -1254,6 +1504,8 @@ class VentanaPrincipal(QMainWindow):
         archivo = Path(ruta)
         self.mediciones_protuberancias.clear()
         self.historial_estados.clear()
+        self.regla_solar = None
+        self.boton_regla.setText("Mostrar regla solar")
         self.escala_equipo_km = None
         self.descripcion_calibracion = None
         self.ajustes.setValue(
