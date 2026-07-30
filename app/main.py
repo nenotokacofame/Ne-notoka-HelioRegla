@@ -3,6 +3,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QKeySequence, QPixmap
+from detector_limbo import detectar_limbo, ErrorDeteccionLimbo
 from limbo import CirculoLimbo
 
 from PySide6.QtWidgets import (
@@ -27,7 +28,7 @@ from PySide6.QtWidgets import (
 
 
 NOMBRE_APLICACION = "Ne-notoka HelioRegla"
-VERSION = "0.2.1"
+VERSION = "0.3.0"
 
 
 class VisorSolar(QGraphicsView):
@@ -79,7 +80,7 @@ class VisorSolar(QGraphicsView):
             QMessageBox.information(
                 self,
                 "Primero abre una imagen",
-                "Necesitas cargar una fotografÃ­a solar antes de ajustar el limbo.",
+                "Necesitas cargar una fotografía solar antes de ajustar el limbo.",
             )
             return
 
@@ -170,12 +171,15 @@ class VentanaPrincipal(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle(f"{NOMBRE_APLICACION} â€” {VERSION}")
+        self.setWindowTitle(f"{NOMBRE_APLICACION} — {VERSION}")
         self.resize(1400, 850)
         self.setMinimumSize(1000, 650)
 
         self.color_limbo = "#39ff88"
         self.grosor_limbo = 3
+        self.modo_ajuste = "Ajuste manual del limbo"
+        self.error_limbo_px = None
+        self.puntos_limbo = None
 
         self.visor = VisorSolar()
         self.visor.imagen_cargada.connect(self.actualizar_informacion)
@@ -206,7 +210,7 @@ class VentanaPrincipal(QMainWindow):
         subtitulo.setObjectName("nombreAplicacion")
 
         descripcion = QLabel(
-            "MediciÃ³n, comparaciÃ³n y etiquetado de imÃ¡genes solares."
+            "Medición, comparación y etiquetado de imágenes solares."
         )
         descripcion.setWordWrap(True)
         descripcion.setObjectName("descripcion")
@@ -219,6 +223,12 @@ class VentanaPrincipal(QMainWindow):
         self.boton_limbo.setObjectName("botonSecundario")
         self.boton_limbo.clicked.connect(self.iniciar_ajuste_limbo)
 
+        self.boton_autodetectar = QPushButton("Autodetectar limbo")
+        self.boton_autodetectar.setObjectName("botonPrincipal")
+        self.boton_autodetectar.clicked.connect(
+            self.iniciar_autodeteccion_limbo
+        )
+
         self.boton_color_limbo = QPushButton("Color del contorno")
         self.boton_color_limbo.setObjectName("botonColor")
         self.boton_color_limbo.clicked.connect(self.seleccionar_color_limbo)
@@ -230,7 +240,7 @@ class VentanaPrincipal(QMainWindow):
         self.selector_grosor.setToolTip("Grosor del contorno del limbo")
         self.selector_grosor.valueChanged.connect(self.cambiar_grosor_limbo)
 
-        self.etiqueta_medicion = QLabel("CalibraciÃ³n pendiente")
+        self.etiqueta_medicion = QLabel("Calibración pendiente")
         self.etiqueta_medicion.setWordWrap(True)
         self.etiqueta_medicion.setObjectName("medicion")
 
@@ -243,20 +253,21 @@ class VentanaPrincipal(QMainWindow):
         separador.setObjectName("separador")
 
         proximamente = QLabel(
-            "PrÃ³ximas herramientas\n\n"
-            "â—‹ Ajuste del limbo\n"
-            "â†” Regla solar\n"
-            "âŒ– MediciÃ³n de estructuras\n"
-            "â— ComparaciÃ³n planetaria\n"
-            "ðŸ· Etiquetado de regiones"
+            "Próximas herramientas\n\n"
+            "• Ajuste del limbo\n"
+            "• Regla solar\n"
+            "• Medición de estructuras\n"
+            "• Comparación planetaria\n"
+            "• Etiquetado de regiones"
         )
+        
         proximamente.setObjectName("proximamente")
         proximamente.setWordWrap(True)
 
         ayuda = QLabel(
             "Rueda: zoom\n"
             "Arrastrar: desplazar\n"
-            "TambiÃ©n puedes soltar una imagen."
+            "También puedes soltar una imagen."
         )
         ayuda.setObjectName("ayuda")
 
@@ -266,6 +277,7 @@ class VentanaPrincipal(QMainWindow):
         panel_layout.addSpacing(8)
         panel_layout.addWidget(self.boton_abrir)
         panel_layout.addWidget(self.boton_limbo)
+        panel_layout.addWidget(self.boton_autodetectar)
 
         fila_estilo = QHBoxLayout()
         fila_estilo.setSpacing(8)
@@ -284,7 +296,7 @@ class VentanaPrincipal(QMainWindow):
         zona_layout = QVBoxLayout(zona_visor)
         zona_layout.setContentsMargins(18, 18, 18, 18)
 
-        encabezado = QLabel("Ãrea de trabajo solar")
+        encabezado = QLabel("Área de trabajo solar")
         encabezado.setObjectName("encabezado")
 
         zona_layout.addWidget(encabezado)
@@ -308,7 +320,7 @@ class VentanaPrincipal(QMainWindow):
         accion_ajustar.setShortcut("F")
         accion_ajustar.triggered.connect(self.visor.ajustar_ventana)
 
-        accion_real = QAction("TamaÃ±o real", self)
+        accion_real = QAction("Tamaño real", self)
         accion_real.setShortcut("1")
         accion_real.triggered.connect(self.visor.tamano_real)
 
@@ -327,7 +339,7 @@ class VentanaPrincipal(QMainWindow):
             self,
             "Abrir imagen solar",
             "",
-            "ImÃ¡genes (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;"
+            "Imágenes (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;"
             "Todos los archivos (*)",
         )
 
@@ -335,7 +347,57 @@ class VentanaPrincipal(QMainWindow):
             self.visor.cargar_imagen(ruta)
 
     def iniciar_ajuste_limbo(self):
+        self.modo_ajuste = "Ajuste manual del limbo"
+        self.error_limbo_px = None
+        self.puntos_limbo = None
         self.visor.crear_ajuste_limbo(self.actualizar_medicion_limbo)
+        self.aplicar_estilo_limbo()
+
+    def iniciar_autodeteccion_limbo(self):
+        if self.visor.ruta_imagen is None:
+            QMessageBox.information(
+                self,
+                "Primero abre una imagen",
+                "Necesitas cargar una fotografía solar.",
+            )
+            return
+
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        self.statusBar().showMessage("Analizando el limbo solar…")
+
+        try:
+            resultado = detectar_limbo(self.visor.ruta_imagen)
+        except ErrorDeteccionLimbo as error:
+            QMessageBox.warning(
+                self,
+                "No fue posible detectar el limbo",
+                str(error),
+            )
+            self.statusBar().showMessage(
+                "Autodetección no concluyente; usa el ajuste manual"
+            )
+            return
+        finally:
+            QApplication.restoreOverrideCursor()
+
+        if self.visor.circulo_limbo is not None:
+            self.visor.escena.removeItem(
+                self.visor.circulo_limbo
+            )
+
+        self.modo_ajuste = "Limbo detectado automáticamente"
+        self.error_limbo_px = resultado.error_px
+        self.puntos_limbo = resultado.puntos_usados
+
+        self.visor.circulo_limbo = CirculoLimbo(
+            resultado.centro_x,
+            resultado.centro_y,
+            resultado.radio,
+            self.actualizar_medicion_limbo,
+        )
+        self.visor.escena.addItem(
+            self.visor.circulo_limbo
+        )
         self.aplicar_estilo_limbo()
 
     def seleccionar_color_limbo(self):
@@ -371,16 +433,26 @@ class VentanaPrincipal(QMainWindow):
         diametro = radio * 2
         km_por_pixel = 1_391_400 / diametro
 
+        detalle_error = ""
+
+        if self.error_limbo_px is not None:
+            error_km = self.error_limbo_px * km_por_pixel
+            detalle_error = (
+                f"\nResiduo: ±{self.error_limbo_px:.2f} px"
+                f" (±{error_km:,.0f} km)"
+                f"\nPuntos usados: {self.puntos_limbo}"
+            )
+
         self.etiqueta_medicion.setText(
-            "Ajuste manual del limbo\n"
+            f"{self.modo_ajuste}\n"
             f"Centro: {centro_x:.1f}, {centro_y:.1f} px\n"
             f"Radio: {radio:.1f} px\n"
-            f"DiÃ¡metro: {diametro:.1f} px\n"
+            f"Diámetro: {diametro:.1f} px\n"
             f"Escala: {km_por_pixel:,.1f} km/px"
+            f"{detalle_error}"
         )
-
         self.statusBar().showMessage(
-            f"DiÃ¡metro solar: {diametro:.1f} px Â· "
+            f"Diámetro solar: {diametro:.1f} px · "
             f"Escala provisional: {km_por_pixel:,.1f} km/px"
         )
 
@@ -390,7 +462,7 @@ class VentanaPrincipal(QMainWindow):
 
         self.etiqueta_archivo.setText(
             f"{archivo.name}\n"
-            f"{pixmap.width()} Ã— {pixmap.height()} pÃ­xeles"
+            f"{pixmap.width()} × {pixmap.height()} píxeles"
         )
         self.statusBar().showMessage(f"Imagen cargada: {archivo.name}")
 
