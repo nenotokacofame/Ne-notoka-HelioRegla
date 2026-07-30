@@ -12,6 +12,7 @@ class ResultadoParcial:
     incertidumbre_radio_px: float
     cobertura_grados: float
     puntos_usados: int
+    muestras_circulos: list
 
 
 def _circulo_algebraico(puntos):
@@ -57,48 +58,41 @@ def _cobertura_angular(puntos, cx, cy):
     huecos = np.diff(
         np.concatenate((angulos, [angulos[0] + 2 * np.pi]))
     )
-    mayor_hueco = float(np.max(huecos))
 
-    return float(np.degrees(2 * np.pi - mayor_hueco))
+    return float(
+        np.degrees(2 * np.pi - np.max(huecos))
+    )
 
 
-def _incertidumbre_montecarlo(
-    puntos,
-    cobertura,
-    muestras=250,
-):
+def _montecarlo(puntos, cobertura, muestras=300):
     puntos = np.asarray(puntos, dtype=float)
     rng = np.random.default_rng(20260730)
-
-    # Incertidumbre estimada de un clic manual.
-    sigma_clic = 1.5
-    radios = []
+    circulos = []
 
     for _ in range(muestras):
         simulados = puntos + rng.normal(
             0,
-            sigma_clic,
+            1.5,
             size=puntos.shape,
         )
 
         try:
-            _, _, radio = _circulo_algebraico(simulados)
+            circulos.append(_circulo_algebraico(simulados))
         except (ValueError, np.linalg.LinAlgError):
             continue
 
-        if np.isfinite(radio):
-            radios.append(radio)
+    if len(circulos) < 30:
+        return float("inf"), []
 
-    if len(radios) < 30:
-        return float("inf")
-
+    radios = np.asarray(
+        [circulo[2] for circulo in circulos]
+    )
     incertidumbre = float(np.std(radios, ddof=1))
 
-    # Penaliza arcos muy cortos, cuya extrapolación es inestable.
     if cobertura < 90:
         incertidumbre *= 90 / max(cobertura, 5)
 
-    return incertidumbre
+    return incertidumbre, circulos
 
 
 def ajustar_limbo_parcial(puntos):
@@ -116,7 +110,7 @@ def ajustar_limbo_parcial(puntos):
     residuo = float(np.sqrt(np.mean(residuales**2)))
 
     cobertura = _cobertura_angular(puntos, cx, cy)
-    incertidumbre = _incertidumbre_montecarlo(
+    incertidumbre, circulos = _montecarlo(
         puntos,
         cobertura,
     )
@@ -129,4 +123,5 @@ def ajustar_limbo_parcial(puntos):
         incertidumbre_radio_px=incertidumbre,
         cobertura_grados=cobertura,
         puntos_usados=len(puntos),
+        muestras_circulos=circulos,
     )

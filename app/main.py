@@ -1,17 +1,20 @@
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QSettings, Signal
+from PySide6.QtCore import QPointF, Qt, QSettings, Signal
 from PySide6.QtGui import (
     QAction,
     QColor,
+    QIcon,
     QKeySequence,
     QPen,
     QPixmap,
 )
 from ajuste_parcial import ajustar_limbo_parcial
+from calibracion import DialogoCalibracion
 from detector_limbo import detectar_limbo, ErrorDeteccionLimbo
 from limbo import CirculoLimbo
+from mediciones import MedicionProtuberancia
 
 from PySide6.QtWidgets import (
     QApplication,
@@ -27,7 +30,8 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
-    QSpinBox,
+    QComboBox,
+    QScrollArea,
     QStatusBar,
     QToolBar,
     QVBoxLayout,
@@ -36,11 +40,15 @@ from PySide6.QtWidgets import (
 
 
 NOMBRE_APLICACION = "Ne-notoka HelioRegla"
-VERSION = "0.4.0"
+RUTA_PROYECTO = Path(__file__).resolve().parent.parent
+RUTA_LOGO = RUTA_PROYECTO / "assets" / "logo_ne_notoka.png"
+RUTA_ICONO = RUTA_PROYECTO / "assets" / "icono_ne_notoka.ico"
+VERSION = "0.9.1"
 
 
 class VisorSolar(QGraphicsView):
     imagen_cargada = Signal(str)
+    punto_protuberancia = Signal(float, float)
 
     def __init__(self):
         super().__init__()
@@ -58,6 +66,7 @@ class VisorSolar(QGraphicsView):
         self.previsualizacion_parcial = None
         self.resultado_parcial = None
         self.callback_parcial = None
+        self.modo_medicion_protuberancia = False
 
         self.setAcceptDrops(True)
         self.setDragMode(QGraphicsView.ScrollHandDrag)
@@ -282,6 +291,21 @@ class VisorSolar(QGraphicsView):
         self.unsetCursor()
 
     def mousePressEvent(self, event):
+        if self.modo_medicion_protuberancia:
+            if event.button() == Qt.LeftButton:
+                posicion = self.mapToScene(
+                    event.position().toPoint()
+                )
+                self.punto_protuberancia.emit(
+                    posicion.x(),
+                    posicion.y(),
+                )
+                self.modo_medicion_protuberancia = False
+                self.setDragMode(QGraphicsView.ScrollHandDrag)
+                self.unsetCursor()
+                event.accept()
+                return
+
         if not self.modo_limbo_parcial:
             super().mousePressEvent(event)
             return
@@ -367,6 +391,7 @@ class VentanaPrincipal(QMainWindow):
         super().__init__()
 
         self.setWindowTitle(f"{NOMBRE_APLICACION} — {VERSION}")
+        self.setWindowIcon(QIcon(str(RUTA_ICONO)))
         self.resize(1400, 850)
         self.setMinimumSize(1000, 650)
 
@@ -389,9 +414,32 @@ class VentanaPrincipal(QMainWindow):
         self.error_limbo_px = None
         self.incertidumbre_radio_px = None
         self.puntos_limbo = None
+        self.escala_equipo_km = None
+        self.descripcion_calibracion = None
+        self.muestras_circulos = []
+
+        self.color_anotaciones = self.ajustes.value(
+            "anotaciones/color",
+            "#ff3dbb",
+            type=str,
+        )
+        self.tamano_anotaciones = self.ajustes.value(
+            "anotaciones/tamano",
+            28,
+            type=int,
+        )
 
         self.visor = VisorSolar()
-        self.visor.imagen_cargada.connect(self.actualizar_informacion)
+        self.visor.imagen_cargada.connect(
+            self.actualizar_informacion
+        )
+        self.visor.punto_protuberancia.connect(
+            self.crear_medicion_protuberancia
+        )
+        self.mediciones_protuberancias = []
+        self.historial_estados = []
+        self.restaurando_historial = False
+        self.suspendiendo_historial = False
 
         self.crear_interfaz()
         self.crear_barra_herramientas()
@@ -406,7 +454,7 @@ class VentanaPrincipal(QMainWindow):
 
         panel = QFrame()
         panel.setObjectName("panelLateral")
-        panel.setFixedWidth(285)
+        panel.setMinimumWidth(315)
 
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(22, 24, 22, 24)
@@ -415,8 +463,37 @@ class VentanaPrincipal(QMainWindow):
         titulo = QLabel("Ne-notoka")
         titulo.setObjectName("marca")
 
-        subtitulo = QLabel("HELIOREGLA")
+        subtitulo = QLabel("HELIOREGLA · CIENCIA SOLAR")
         subtitulo.setObjectName("nombreAplicacion")
+
+        logo_marca = QLabel()
+        logo_marca.setObjectName("logoMarca")
+        logo_marca.setFixedSize(58, 58)
+
+        pixmap_logo = QPixmap(str(RUTA_LOGO))
+
+        if not pixmap_logo.isNull():
+            logo_marca.setPixmap(
+                pixmap_logo.scaled(
+                    56,
+                    56,
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation,
+                )
+            )
+        logo_marca.setAlignment(Qt.AlignCenter)
+
+        textos_marca = QVBoxLayout()
+        textos_marca.setContentsMargins(0, 0, 0, 0)
+        textos_marca.setSpacing(1)
+        textos_marca.addWidget(titulo)
+        textos_marca.addWidget(subtitulo)
+
+        cabecera_marca = QHBoxLayout()
+        cabecera_marca.setContentsMargins(0, 0, 0, 0)
+        cabecera_marca.setSpacing(10)
+        cabecera_marca.addWidget(logo_marca)
+        cabecera_marca.addLayout(textos_marca, 1)
 
         descripcion = QLabel(
             "Medición, comparación y etiquetado de imágenes solares."
@@ -444,6 +521,60 @@ class VentanaPrincipal(QMainWindow):
             self.iniciar_ajuste_parcial
         )
 
+        self.boton_calibracion = QPushButton(
+            "Calibración por equipo"
+        )
+        self.boton_calibracion.setObjectName("botonSecundario")
+        self.boton_calibracion.clicked.connect(
+            self.abrir_calibracion_equipo
+        )
+
+        self.boton_protuberancia = QPushButton(
+            "Medir protuberancia"
+        )
+        self.boton_protuberancia.setObjectName("botonPrincipal")
+        self.boton_protuberancia.clicked.connect(
+            self.iniciar_medicion_protuberancia
+        )
+
+        self.boton_borrar_mediciones = QPushButton(
+            "Borrar mediciones"
+        )
+        self.boton_borrar_mediciones.clicked.connect(
+            self.borrar_mediciones
+        )
+
+        self.boton_color_anotaciones = QPushButton(
+            "Color de anotaciones"
+        )
+        self.boton_color_anotaciones.clicked.connect(
+            self.seleccionar_color_anotaciones
+        )
+        self.boton_color_anotaciones.setStyleSheet(
+            f"border: 2px solid {self.color_anotaciones};"
+        )
+
+        self.selector_tamano_anotaciones = QComboBox()
+        tamanos = (12, 16, 20, 24, 28, 32, 40, 48, 56, 64)
+
+        for tamano in tamanos:
+            self.selector_tamano_anotaciones.addItem(
+                f"Texto {tamano} px",
+                tamano,
+            )
+
+        indice_tamano = (
+            self.selector_tamano_anotaciones.findData(
+                self.tamano_anotaciones
+            )
+        )
+        self.selector_tamano_anotaciones.setCurrentIndex(
+            max(0, indice_tamano)
+        )
+        self.selector_tamano_anotaciones.currentIndexChanged.connect(
+            self.cambiar_tamano_anotaciones
+        )
+
         self.boton_finalizar_parcial = QPushButton(
             "Finalizar ajuste parcial"
         )
@@ -462,12 +593,23 @@ class VentanaPrincipal(QMainWindow):
         self.boton_color_limbo.setObjectName("botonColor")
         self.boton_color_limbo.clicked.connect(self.seleccionar_color_limbo)
 
-        self.selector_grosor = QSpinBox()
-        self.selector_grosor.setRange(1, 10)
-        self.selector_grosor.setValue(self.grosor_limbo)
-        self.selector_grosor.setSuffix(" px")
-        self.selector_grosor.setToolTip("Grosor del contorno del limbo")
-        self.selector_grosor.valueChanged.connect(self.cambiar_grosor_limbo)
+        self.selector_grosor = QComboBox()
+
+        for grosor in range(1, 11):
+            self.selector_grosor.addItem(
+                f"{grosor} px",
+                grosor,
+            )
+
+        self.selector_grosor.setCurrentIndex(
+            max(0, min(9, self.grosor_limbo - 1))
+        )
+        self.selector_grosor.setToolTip(
+            "Grosor del contorno del limbo"
+        )
+        self.selector_grosor.currentIndexChanged.connect(
+            self.cambiar_grosor_limbo
+        )
 
         self.etiqueta_medicion = QLabel("Calibración pendiente")
         self.etiqueta_medicion.setWordWrap(True)
@@ -500,14 +642,27 @@ class VentanaPrincipal(QMainWindow):
         )
         ayuda.setObjectName("ayuda")
 
-        panel_layout.addWidget(titulo)
-        panel_layout.addWidget(subtitulo)
+        panel_layout.addLayout(cabecera_marca)
         panel_layout.addWidget(descripcion)
         panel_layout.addSpacing(8)
         panel_layout.addWidget(self.boton_abrir)
         panel_layout.addWidget(self.boton_limbo)
         panel_layout.addWidget(self.boton_autodetectar)
         panel_layout.addWidget(self.boton_parcial)
+        panel_layout.addWidget(self.boton_calibracion)
+        panel_layout.addWidget(self.boton_protuberancia)
+        panel_layout.addWidget(self.boton_borrar_mediciones)
+
+        fila_anotaciones = QHBoxLayout()
+        fila_anotaciones.setSpacing(8)
+        fila_anotaciones.addWidget(
+            self.boton_color_anotaciones
+        )
+        fila_anotaciones.addWidget(
+            self.selector_tamano_anotaciones
+        )
+        panel_layout.addLayout(fila_anotaciones)
+
         panel_layout.addWidget(self.boton_finalizar_parcial)
         panel_layout.addWidget(self.boton_cancelar_parcial)
 
@@ -534,7 +689,16 @@ class VentanaPrincipal(QMainWindow):
         zona_layout.addWidget(encabezado)
         zona_layout.addWidget(self.visor, 1)
 
-        distribucion.addWidget(panel)
+        scroll_panel = QScrollArea()
+        scroll_panel.setWidgetResizable(True)
+        scroll_panel.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarAlwaysOff
+        )
+        scroll_panel.setFrameShape(QFrame.NoFrame)
+        scroll_panel.setFixedWidth(350)
+        scroll_panel.setWidget(panel)
+
+        distribucion.addWidget(scroll_panel)
         distribucion.addWidget(zona_visor, 1)
 
         self.setCentralWidget(contenedor)
@@ -560,6 +724,14 @@ class VentanaPrincipal(QMainWindow):
         barra.addSeparator()
         barra.addAction(accion_ajustar)
         barra.addAction(accion_real)
+        barra.addSeparator()
+
+        accion_deshacer = QAction("Deshacer", self)
+        accion_deshacer.setShortcut(QKeySequence.Undo)
+        accion_deshacer.triggered.connect(
+            self.deshacer_ultimo_cambio
+        )
+        barra.addAction(accion_deshacer)
 
     def crear_estado(self):
         estado = QStatusBar()
@@ -583,6 +755,263 @@ class VentanaPrincipal(QMainWindow):
 
         if ruta:
             self.visor.cargar_imagen(ruta)
+
+    def seleccionar_color_anotaciones(self):
+        color = QColorDialog.getColor(
+            self.color_anotaciones,
+            self,
+            "Seleccionar color de anotaciones",
+        )
+
+        if not color.isValid():
+            return
+
+        self.color_anotaciones = color.name()
+        self.ajustes.setValue(
+            "anotaciones/color",
+            self.color_anotaciones,
+        )
+        self.boton_color_anotaciones.setStyleSheet(
+            f"border: 2px solid {self.color_anotaciones};"
+        )
+        self.aplicar_estilo_anotaciones()
+
+    def cambiar_tamano_anotaciones(self, indice):
+        tamano = self.selector_tamano_anotaciones.itemData(
+            indice
+        )
+
+        if tamano is None:
+            return
+
+        self.tamano_anotaciones = int(tamano)
+        self.ajustes.setValue(
+            "anotaciones/tamano",
+            self.tamano_anotaciones,
+        )
+        self.aplicar_estilo_anotaciones()
+
+    def aplicar_estilo_anotaciones(self):
+        for medicion in self.mediciones_protuberancias:
+            medicion.establecer_estilo(
+                self.color_anotaciones,
+                self.tamano_anotaciones,
+            )
+
+    def iniciar_medicion_protuberancia(self):
+        if self.visor.circulo_limbo is None:
+            QMessageBox.information(
+                self,
+                "Primero ajusta el limbo",
+                "Autodetecta el disco o realiza un ajuste "
+                "parcial antes de medir una protuberancia.",
+            )
+            return
+
+        self.visor.modo_medicion_protuberancia = True
+        self.visor.setDragMode(QGraphicsView.NoDrag)
+        self.visor.setCursor(Qt.CrossCursor)
+        self.statusBar().showMessage(
+            "Haz clic en la punta de la protuberancia"
+        )
+
+    def crear_medicion_protuberancia(self, x, y):
+        self.registrar_estado()
+        circulo = self.visor.circulo_limbo
+        escala_limbo = 1_391_400 / (circulo.radio * 2)
+        escala = (
+            self.escala_equipo_km
+            if self.escala_equipo_km is not None
+            else escala_limbo
+        )
+
+        medicion = MedicionProtuberancia(
+            self.visor.escena,
+            circulo,
+            QPointF(x, y),
+            escala,
+            self.visor.elemento_imagen.boundingRect(),
+            muestras_circulos=self.muestras_circulos,
+            incertidumbre_limbo_px=(
+                self.error_limbo_px or 0.0
+            ),
+            al_eliminar=self.eliminar_medicion_individual,
+            color_anotacion=self.color_anotaciones,
+            tamano_texto=self.tamano_anotaciones,
+            antes_cambiar=self.registrar_estado,
+        )
+        self.mediciones_protuberancias.append(medicion)
+        self.statusBar().showMessage(
+            "Medición creada; arrastra el punto rosa "
+            "para ajustarla"
+        )
+
+    def eliminar_medicion_individual(self, medicion):
+        if medicion in self.mediciones_protuberancias:
+            self.mediciones_protuberancias.remove(medicion)
+
+        self.statusBar().showMessage(
+            "Medición individual eliminada"
+        )
+
+    def capturar_estado(self):
+        circulo = self.visor.circulo_limbo
+
+        estado_circulo = None
+
+        if circulo is not None:
+            estado_circulo = {
+                "centro_x": circulo.pos().x(),
+                "centro_y": circulo.pos().y(),
+                "radio": circulo.radio,
+            }
+
+        mediciones = [
+            {
+                "x": medicion.punta.x(),
+                "y": medicion.punta.y(),
+            }
+            for medicion in self.mediciones_protuberancias
+            if not medicion.eliminada
+        ]
+
+        return {
+            "circulo": estado_circulo,
+            "mediciones": mediciones,
+        }
+
+    def registrar_estado(self):
+        if (
+            self.restaurando_historial
+            or self.suspendiendo_historial
+            or self.visor.ruta_imagen is None
+        ):
+            return
+
+        estado = self.capturar_estado()
+
+        if (
+            self.historial_estados
+            and self.historial_estados[-1] == estado
+        ):
+            return
+
+        self.historial_estados.append(estado)
+
+        if len(self.historial_estados) > 100:
+            self.historial_estados.pop(0)
+
+    def deshacer_ultimo_cambio(self):
+        if not self.historial_estados:
+            self.statusBar().showMessage(
+                "No hay cambios que deshacer"
+            )
+            return
+
+        estado = self.historial_estados.pop()
+        self.restaurando_historial = True
+        self.suspendiendo_historial = True
+
+        try:
+            circulo = self.visor.circulo_limbo
+            estado_circulo = estado["circulo"]
+
+            if circulo is not None and estado_circulo is not None:
+                circulo.setPos(
+                    estado_circulo["centro_x"],
+                    estado_circulo["centro_y"],
+                )
+                circulo.establecer_radio(
+                    estado_circulo["radio"]
+                )
+
+            for medicion in self.mediciones_protuberancias[:]:
+                medicion.antes_cambiar = None
+                medicion.eliminar()
+
+            self.mediciones_protuberancias.clear()
+
+            for datos in estado["mediciones"]:
+                self.crear_medicion_protuberancia(
+                    datos["x"],
+                    datos["y"],
+                )
+
+            self.statusBar().showMessage(
+                "Último cambio deshecho"
+            )
+        finally:
+            self.suspendiendo_historial = False
+            self.restaurando_historial = False
+
+    def borrar_mediciones(self):
+        if not self.mediciones_protuberancias:
+            return
+
+        self.registrar_estado()
+        self.suspendiendo_historial = True
+
+        try:
+            for medicion in self.mediciones_protuberancias[:]:
+                medicion.eliminar()
+        finally:
+            self.suspendiendo_historial = False
+
+        self.mediciones_protuberancias.clear()
+        self.statusBar().showMessage("Mediciones eliminadas")
+
+    def abrir_calibracion_equipo(self):
+        if self.visor.ruta_imagen is None:
+            QMessageBox.information(
+                self,
+                "Primero abre una imagen",
+                "Necesitas cargar una imagen para leer "
+                "sus metadatos y calibrarla.",
+            )
+            return
+
+        escala_limbo = None
+
+        if self.visor.circulo_limbo is not None:
+            escala_limbo = (
+                1_391_400
+                / (self.visor.circulo_limbo.radio * 2)
+            )
+
+        dialogo = DialogoCalibracion(
+            self.visor.ruta_imagen,
+            escala_limbo,
+            self,
+        )
+
+        if dialogo.exec() != DialogoCalibracion.Accepted:
+            return
+
+        resultado = dialogo.resultado
+        self.escala_equipo_km = resultado.km_por_pixel
+        self.descripcion_calibracion = resultado.descripcion
+
+        self.etiqueta_medicion.setText(
+            "Calibración mediante el equipo\n"
+            f"{resultado.descripcion}\n"
+            f"Escala angular: "
+            f"{resultado.arcsec_por_pixel:.5f} ″/px\n"
+            f"Escala física activa: "
+            f"{resultado.km_por_pixel:,.2f} km/px"
+        )
+        self.statusBar().showMessage(
+            "Calibración óptica aplicada: "
+            f"{resultado.km_por_pixel:,.2f} km/px"
+        )
+
+        circulo = self.visor.circulo_limbo
+
+        if circulo is not None:
+            self.actualizar_medicion_limbo(
+                circulo.pos().x(),
+                circulo.pos().y(),
+                circulo.radio,
+            )
 
     def iniciar_ajuste_parcial(self):
         if not self.visor.iniciar_limbo_parcial(
@@ -650,6 +1079,7 @@ class VentanaPrincipal(QMainWindow):
             resultado.incertidumbre_radio_px
         )
         self.puntos_limbo = resultado.puntos_usados
+        self.muestras_circulos = resultado.muestras_circulos
         self.aplicar_estilo_limbo()
         self.actualizar_medicion_limbo(
             resultado.centro_x,
@@ -671,6 +1101,7 @@ class VentanaPrincipal(QMainWindow):
         self.modo_ajuste = "Ajuste manual del limbo"
         self.error_limbo_px = None
         self.incertidumbre_radio_px = None
+        self.muestras_circulos = []
         self.puntos_limbo = None
         self.visor.crear_ajuste_limbo(self.actualizar_medicion_limbo)
         self.aplicar_estilo_limbo()
@@ -710,6 +1141,7 @@ class VentanaPrincipal(QMainWindow):
         self.modo_ajuste = "Limbo detectado automáticamente"
         self.error_limbo_px = resultado.error_px
         self.incertidumbre_radio_px = None
+        self.muestras_circulos = []
         self.puntos_limbo = resultado.puntos_usados
 
         self.visor.circulo_limbo = CirculoLimbo(
@@ -743,8 +1175,13 @@ class VentanaPrincipal(QMainWindow):
         )
         self.aplicar_estilo_limbo()
 
-    def cambiar_grosor_limbo(self, grosor):
-        self.grosor_limbo = grosor
+    def cambiar_grosor_limbo(self, indice):
+        grosor = self.selector_grosor.itemData(indice)
+
+        if grosor is None:
+            return
+
+        self.grosor_limbo = int(grosor)
         self.ajustes.setValue(
             "contorno/grosor",
             self.grosor_limbo,
@@ -755,6 +1192,7 @@ class VentanaPrincipal(QMainWindow):
         circulo = self.visor.circulo_limbo
 
         if circulo is not None:
+            circulo.antes_cambiar = self.registrar_estado
             circulo.establecer_estilo(
                 self.color_limbo,
                 self.grosor_limbo,
@@ -762,7 +1200,16 @@ class VentanaPrincipal(QMainWindow):
 
     def actualizar_medicion_limbo(self, centro_x, centro_y, radio):
         diametro = radio * 2
-        km_por_pixel = 1_391_400 / diametro
+        escala_limbo = 1_391_400 / diametro
+        km_por_pixel = (
+            self.escala_equipo_km
+            if self.escala_equipo_km is not None
+            else escala_limbo
+        )
+
+        for medicion in self.mediciones_protuberancias:
+            medicion.km_por_pixel = km_por_pixel
+            medicion.recalcular_desde_limbo()
 
         detalle_error = ""
 
@@ -793,7 +1240,9 @@ class VentanaPrincipal(QMainWindow):
             f"Centro: {centro_x:.1f}, {centro_y:.1f} px\n"
             f"Radio: {radio:.1f} px\n"
             f"Diámetro: {diametro:.1f} px\n"
-            f"Escala: {km_por_pixel:,.1f} km/px"
+            f"Escala por limbo: "
+            f"{escala_limbo:,.1f} km/px\n"
+            f"Escala activa: {km_por_pixel:,.1f} km/px"
             f"{detalle_error}"
         )
         self.statusBar().showMessage(
@@ -803,6 +1252,10 @@ class VentanaPrincipal(QMainWindow):
 
     def actualizar_informacion(self, ruta):
         archivo = Path(ruta)
+        self.mediciones_protuberancias.clear()
+        self.historial_estados.clear()
+        self.escala_equipo_km = None
+        self.descripcion_calibracion = None
         self.ajustes.setValue(
             "archivos/ultima_carpeta",
             str(archivo.parent),
@@ -815,140 +1268,339 @@ class VentanaPrincipal(QMainWindow):
         )
         self.statusBar().showMessage(f"Imagen cargada: {archivo.name}")
 
+    def closeEvent(self, event):
+        if not self.mediciones_protuberancias:
+            event.accept()
+            return
+
+        respuesta = QMessageBox.question(
+            self,
+            "Cerrar Ne-notoka HelioRegla",
+            "Hay mediciones en la imagen. "
+            "¿Estás seguro de que deseas cerrar?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+
+        if respuesta == QMessageBox.Yes:
+            event.accept()
+        else:
+            event.ignore()
+
     def aplicar_estilo(self):
         self.setStyleSheet(
             """
             QMainWindow, QWidget {
-                background-color: #10151c;
-                color: #eaf2f8;
-                font-family: "Segoe UI";
+                background-color: #F4F7F9;
+                color: #183241;
+                font-family: "Century Gothic", "Segoe UI";
                 font-size: 14px;
             }
 
             QToolBar {
-                background-color: #18212b;
+                background-color: #FFFFFF;
                 border: none;
-                border-bottom: 1px solid #2c3947;
+                border-bottom: 1px solid #D6E0E5;
                 spacing: 8px;
-                padding: 6px;
+                padding: 7px;
             }
 
             QToolButton {
                 background-color: transparent;
-                padding: 7px 12px;
-                border-radius: 5px;
+                color: #004976;
+                padding: 8px 13px;
+                border-radius: 6px;
+                font-weight: 600;
             }
 
             QToolButton:hover {
-                background-color: #283746;
+                background-color: #E4F0F6;
+            }
+
+            QToolButton:pressed {
+                background-color: #CFE3ED;
             }
 
             #panelLateral {
-                background-color: #17202a;
-                border-right: 1px solid #2c3947;
+                background-color: #FFFFFF;
+                border-right: 2px solid #D4E2E9;
+            }
+
+            #logoMarca {
+                background-color: transparent;
+                border: none;
             }
 
             #marca {
-                color: #f5b041;
-                font-size: 27px;
+                background-color: transparent;
+                color: #004976;
+                font-size: 28px;
                 font-weight: 700;
+                padding: 3px 0;
             }
 
             #nombreAplicacion {
-                color: #ffffff;
-                font-size: 18px;
-                font-weight: 600;
-                letter-spacing: 2px;
+                background-color: transparent;
+                color: #D28B00;
+                font-size: 15px;
+                font-weight: 700;
+                letter-spacing: 1px;
             }
 
-            #descripcion, #informacion, #ayuda {
-                color: #9fb2c4;
+            #descripcion {
+                background-color: transparent;
+                color: #547080;
+                padding-bottom: 4px;
+            }
+
+            #informacion, #ayuda {
+                background-color: #EDF4F7;
+                color: #3A5868;
+                border-radius: 6px;
+                padding: 8px;
             }
 
             #encabezado {
-                font-size: 18px;
-                font-weight: 600;
+                color: #004976;
+                font-size: 19px;
+                font-weight: 700;
                 padding: 4px 2px 10px 2px;
             }
 
-            #botonPrincipal {
-                background-color: #d68910;
-                color: #ffffff;
-                border: none;
-                padding: 11px;
+            QPushButton {
+                background-color: #FFFFFF;
+                color: #004976;
+                border: 1px solid #9CB7C5;
+                padding: 9px;
                 border-radius: 6px;
                 font-weight: 600;
+            }
+
+            QPushButton:hover {
+                background-color: #E7F1F6;
+                border-color: #004976;
+            }
+
+            QPushButton:pressed {
+                background-color: #D2E5EE;
+            }
+
+            #botonPrincipal {
+                background-color: #FFB81C;
+                color: #173543;
+                border: 1px solid #D89500;
+                padding: 11px;
+                border-radius: 6px;
+                font-weight: 700;
             }
 
             #botonPrincipal:hover {
-                background-color: #f5b041;
+                background-color: #FFC94D;
+                border-color: #B87800;
             }
 
             #botonSecundario {
-                background-color: #243342;
-                color: #f5b041;
-                border: 1px solid #d68910;
-                padding: 10px;
+                background-color: #FFFFFF;
+                color: #004976;
+                border: 2px solid #004976;
+                padding: 9px;
                 border-radius: 6px;
-                font-weight: 600;
+                font-weight: 700;
             }
 
             #botonSecundario:hover {
-                background-color: #30465a;
+                background-color: #E0EEF4;
             }
 
             #botonColor {
-                background-color: #243342;
-                color: #d8e6f0;
-                border: 2px solid #39ff88;
+                background-color: #FFFFFF;
+                color: #004976;
+                border: 2px solid #39FF88;
                 padding: 7px;
                 border-radius: 5px;
             }
 
-            QSpinBox {
-                background-color: #111820;
-                color: #ffffff;
-                border: 1px solid #44596c;
-                border-radius: 5px;
-                padding: 6px;
-                min-width: 62px;
-            }
-
             #medicion {
-                background-color: #111820;
-                color: #d8e6f0;
-                border: 1px solid #34495e;
-                border-radius: 5px;
-                padding: 9px;
+                background-color: #F0F7FA;
+                color: #183241;
+                border: 1px solid #AFC7D3;
+                border-left: 4px solid #FFB81C;
+                border-radius: 6px;
+                padding: 10px;
             }
 
             #proximamente {
-                color: #c7d5e0;
-                line-height: 1.5;
+                background-color: #F8FBFC;
+                color: #315261;
+                border: 1px solid #D7E4EA;
+                border-radius: 6px;
+                padding: 9px;
             }
 
             #separador {
-                color: #34495e;
-                margin-top: 8px;
-                margin-bottom: 8px;
+                color: #C9D8DF;
+                margin-top: 7px;
+                margin-bottom: 7px;
             }
 
             QGraphicsView {
-                background-color: #050709;
-                border: 1px solid #2c3947;
+                background-color: #050708;
+                border: 2px solid #004976;
+                border-radius: 8px;
+            }
+
+            QComboBox,
+            QSpinBox,
+            QDoubleSpinBox,
+            QDateEdit,
+            QLineEdit {
+                background-color: #FFFFFF;
+                color: #183241;
+                border: 1px solid #8EACBB;
+                border-radius: 5px;
+                padding: 7px;
+                min-height: 20px;
+            }
+
+            QComboBox:hover,
+            QSpinBox:hover,
+            QDoubleSpinBox:hover,
+            QDateEdit:hover,
+            QLineEdit:hover {
+                border-color: #004976;
+            }
+
+            QComboBox::drop-down {
+                border: none;
+                width: 24px;
+            }
+
+            QComboBox QAbstractItemView {
+                background-color: #FFFFFF;
+                color: #183241;
+                selection-background-color: #FFB81C;
+                selection-color: #173543;
+                border: 1px solid #004976;
+            }
+
+            QGroupBox {
+                background-color: #FFFFFF;
+                color: #004976;
+                border: 1px solid #AFC7D3;
                 border-radius: 7px;
+                margin-top: 12px;
+                padding: 12px 8px 8px 8px;
+                font-weight: 700;
+            }
+
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 12px;
+                padding: 0 6px;
+                background-color: #FFFFFF;
+            }
+
+            QDialog {
+                background-color: #F4F7F9;
+            }
+
+            QScrollArea {
+                background-color: #FFFFFF;
+                border: none;
+            }
+
+            QScrollArea > QWidget > QWidget {
+                background-color: #FFFFFF;
+            }
+
+            QScrollBar:vertical {
+                background-color: #E5EDF1;
+                width: 13px;
+                margin: 2px;
+                border: none;
+                border-radius: 6px;
+            }
+
+            QScrollBar::handle:vertical {
+                background-color: #004976;
+                min-height: 32px;
+                border-radius: 5px;
+            }
+
+            QScrollBar::handle:vertical:hover {
+                background-color: #FFB81C;
+            }
+
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {
+                height: 0;
+                background: none;
+                border: none;
+            }
+
+            QScrollBar::add-page:vertical,
+            QScrollBar::sub-page:vertical {
+                background: transparent;
+            }
+
+            QScrollBar:horizontal {
+                background-color: #E5EDF1;
+                height: 13px;
+                margin: 2px;
+                border: none;
+                border-radius: 6px;
+            }
+
+            QScrollBar::handle:horizontal {
+                background-color: #004976;
+                min-width: 32px;
+                border-radius: 5px;
+            }
+
+            QScrollBar::handle:horizontal:hover {
+                background-color: #FFB81C;
+            }
+
+            QScrollBar::add-line:horizontal,
+            QScrollBar::sub-line:horizontal {
+                width: 0;
+                background: none;
+                border: none;
+            }
+
+            QScrollBar::add-page:horizontal,
+            QScrollBar::sub-page:horizontal {
+                background: transparent;
             }
 
             QStatusBar {
-                background-color: #18212b;
-                color: #aebdca;
+                background-color: #004976;
+                color: #FFFFFF;
+                border-top: 2px solid #FFB81C;
+            }
+
+            QStatusBar QLabel {
+                background-color: transparent;
+                color: #FFFFFF;
+            }
+
+            QToolTip {
+                background-color: #FFFFFF;
+                color: #183241;
+                border: 1px solid #004976;
+                padding: 5px;
+            }
+
+            QMessageBox {
+                background-color: #F4F7F9;
             }
             """
         )
 
-
 def main():
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")
+    app.setWindowIcon(QIcon(str(RUTA_ICONO)))
     app.setApplicationName(NOMBRE_APLICACION)
     app.setOrganizationName("Ne-notoka Cofame")
 
