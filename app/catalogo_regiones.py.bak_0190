@@ -1,0 +1,677 @@
+from __future__ import annotations
+
+import json
+import math
+import re
+from dataclasses import dataclass
+from datetime import date, datetime, time, timedelta, timezone
+from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
+
+from PIL import ExifTags, Image
+
+
+SRS_ARCHIVO = (
+    "https://www.ngdc.noaa.gov/stp/space-weather/"
+    "swpc-products/daily_reports/solar_region_summaries"
+)
+SRS_ACTUAL = "https://services.swpc.noaa.gov/text/srs.txt"
+HEK_EVENTOS = "https://api.helioviewer.org/v2/events/"
+AGENTE = "Ne-notoka-HelioRegla/0.19"
+
+
+class ErrorCatalogoRegiones(RuntimeError):
+    pass
+
+
+@dataclass
+class RegionActiva:
+    numero: str
+    ubicacion: str = ""
+    latitud: float | None = None
+    cmd: float | None = None
+    area: int | None = None
+    extension: float | None = None
+    manchas: int | None = None
+    clasificacion: str = ""
+    clase_magnetica: str = ""
+    hpc_x: float | None = None
+    hpc_y: float | None = None
+    fuente_srs: bool = False
+    fuente_hek: bool = False
+    referencia_utc: datetime | None = None
+
+    @property
+    def nombre(self):
+        return f"AR {self.numero}"
+
+    @property
+    def fuentes(self):
+        fuentes = []
+        if self.fuente_srs:
+            fuentes.append("NOAA SRS")
+        if self.fuente_hek:
+            fuentes.append("HEK")
+        return " + ".join(fuentes)
+
+
+def _abrir(url, espera=18):
+    solicitud = Request(
+        url,
+        headers={
+            "User-Agent": AGENTE,
+            "Accept": "application/json, text/plain, */*",
+        },
+    )
+    with urlopen(solicitud, timeout=espera) as respuesta:
+        return respuesta.read()
+
+
+def _texto(url):
+    return _abrir(url).decode("utf-8", errors="replace")
+
+
+def _json(url):
+    return json.loads(_abrir(url).decode("utf-8"))
+
+
+def _numero_ar(numero, fecha_observacion):
+    valor = int(numero)
+    # NOAA conserva cuatro cifras en el SRS aun después de AR 10000.
+    if fecha_observacion >= date(2002, 7, 1) and valor < 10_000:
+        valor += 10_000
+    return str(valor)
+
+
+def analizar_srs(texto, fecha_observacion):
+    regiones = []
+    en_regiones = False
+    fecha_referencia = fecha_observacion + timedelta(days=1)
+    coincidencia_emision = re.search(
+        r":Issued:\s*(\d{4})\s+([A-Za-z]{3})\s+(\d{1,2})",
+        texto,
+    )
+    if coincidencia_emision is not None:
+        try:
+            ano, mes_texto, dia = coincidencia_emision.groups()
+            meses = {
+                nombre: indice
+                for indice, nombre in enumerate(
+                    (
+                        "Jan",
+                        "Feb",
+                        "Mar",
+                        "Apr",
+                        "May",
+                        "Jun",
+                        "Jul",
+                        "Aug",
+                        "Sep",
+                        "Oct",
+                        "Nov",
+                        "Dec",
+                    ),
+                    start=1,
+                )
+            }
+            fecha_emision = date(
+                int(ano),
+                meses[mes_texto.title()],
+                int(dia),
+            )
+            fecha_referencia = fecha_emision
+        except (KeyError, ValueError):
+            pass
+
+    referencia = datetime.combine(
+        fecha_referencia,
+        time.min,
+        tzinfo=timezone.utc,
+    )
+    patron = re.compile(
+        r"^\s*(\d{4})\s+"
+        r"([NS])(\d{2})([EW])(\d{2})\s+"
+        r"(\d+)\s+(\d+)\s+(\S+)\s+"
+        r"(\d+)\s+(\d+)\s+(.+?)\s*$"
+    )
+
+    for linea in texto.splitlines():
+        limpia = linea.strip()
+
+        if limpia.startswith("I.  Regions with Sunspots"):
+            en_regiones = True
+            continue
+
+        if en_regiones and limpia.startswith("IA."):
+            break
+
+        if not en_regiones:
+            continue
+
+        coincidencia = patron.match(linea)
+        if coincidencia is None:
+            continue
+
+        (
+            numero,
+            hemisferio_latitud,
+            grados_latitud,
+            hemisferio_cmd,
+            grados_cmd,
+            _longitud,
+            area,
+            clasificacion,
+            extension,
+            manchas,
+            clase_magnetica,
+        ) = coincidencia.groups()
+
+        latitud = float(grados_latitud)
+        if hemisferio_latitud == "S":
+            latitud *= -1
+
+        cmd = float(grados_cmd)
+        if hemisferio_cmd == "E":
+            cmd *= -1
+
+        regiones.append(
+            RegionActiva(
+                numero=_numero_ar(numero, fecha_observacion),
+                ubicacion=(
+                    f"{hemisferio_latitud}{grados_latitud}"
+                    f"{hemisferio_cmd}{grados_cmd}"
+                ),
+                latitud=latitud,
+                cmd=cmd,
+                area=int(area),
+                extension=float(extension),
+                manchas=int(manchas),
+                clasificacion=clasificacion,
+                clase_magnetica=clase_magnetica.strip(),
+                fuente_srs=True,
+                referencia_utc=referencia,
+            )
+        )
+
+    return regiones
+
+
+def consultar_srs(fecha_observacion):
+    fecha_informe = fecha_observacion + timedelta(days=1)
+    archivo = f"{fecha_informe:%Y%m%d}SRS.txt"
+    url_archivo = (
+        f"{SRS_ARCHIVO}/{fecha_informe:%Y}/"
+        f"{fecha_informe:%m}/{archivo}"
+    )
+    errores = []
+
+    urls = [url_archivo]
+    hoy_utc = datetime.now(timezone.utc).date()
+    if fecha_observacion >= hoy_utc - timedelta(days=1):
+        urls.append(SRS_ACTUAL)
+
+    for url in urls:
+        try:
+            regiones = analizar_srs(
+                _texto(url),
+                fecha_observacion,
+            )
+            if regiones:
+                return regiones
+        except (HTTPError, URLError, TimeoutError, OSError) as error:
+            errores.append(str(error))
+
+    if errores:
+        raise ErrorCatalogoRegiones(
+            "No fue posible descargar el Solar Region Summary."
+        )
+
+    return []
+
+
+def _valor(evento, *claves):
+    fuentes = [evento]
+    contenido = evento.get("source")
+    if isinstance(contenido, dict):
+        fuentes.append(contenido)
+
+    claves_normalizadas = {
+        clave.lower().replace("_", "") for clave in claves
+    }
+
+    for fuente in fuentes:
+        for clave, valor in fuente.items():
+            normalizada = str(clave).lower().replace("_", "")
+            if normalizada in claves_normalizadas and valor not in (
+                None,
+                "",
+            ):
+                return valor
+    return None
+
+
+def _numero_desde_evento(evento):
+    valor = _valor(
+        evento,
+        "ar_noaanum",
+        "ar_noaa_num",
+        "noaa_ar",
+        "noaanum",
+    )
+
+    if valor is None:
+        valor = evento.get("label", "")
+
+    encontrados = re.findall(r"\d{4,5}", str(valor))
+    if not encontrados:
+        return None
+
+    numero = int(encontrados[-1])
+    if numero < 10_000:
+        numero += 10_000
+    return str(numero)
+
+
+def _flotante(valor):
+    try:
+        return float(valor)
+    except (TypeError, ValueError):
+        return None
+
+
+def _entero(valor):
+    try:
+        return int(float(valor))
+    except (TypeError, ValueError):
+        return None
+
+
+def _eventos_activos(respuesta):
+    if isinstance(respuesta, list):
+        for elemento in respuesta:
+            if not isinstance(elemento, dict):
+                continue
+
+            if "groups" in elemento:
+                if str(elemento.get("name", "")).lower() != (
+                    "active region"
+                ):
+                    continue
+                for grupo in elemento.get("groups", []):
+                    if not isinstance(grupo, dict):
+                        continue
+                    if "noaa" not in str(
+                        grupo.get("name", "")
+                    ).lower():
+                        continue
+                    for evento in grupo.get("data", []):
+                        if isinstance(evento, dict):
+                            yield evento
+            elif str(
+                elemento.get("concept", "")
+            ).lower() == "active region" and "noaa" in str(
+                elemento.get("frm_name", "")
+            ).lower():
+                yield elemento
+
+
+def analizar_hek(respuesta):
+    regiones = []
+    for evento in _eventos_activos(respuesta):
+        numero = _numero_desde_evento(evento)
+        if numero is None:
+            continue
+
+        regiones.append(
+            RegionActiva(
+                numero=numero,
+                manchas=_entero(
+                    _valor(evento, "ar_numspots")
+                ),
+                area=_entero(
+                    _valor(
+                        evento,
+                        "area_atdiskcenter",
+                        "area_raw",
+                    )
+                ),
+                clasificacion=str(
+                    _valor(evento, "ar_mcintoshcls") or ""
+                ),
+                clase_magnetica=str(
+                    _valor(evento, "ar_mtwilsoncls") or ""
+                ),
+                hpc_x=_flotante(
+                    _valor(evento, "hv_hpc_x", "hpc_x")
+                ),
+                hpc_y=_flotante(
+                    _valor(evento, "hv_hpc_y", "hpc_y")
+                ),
+                fuente_hek=True,
+            )
+        )
+    return regiones
+
+
+def consultar_hek(fecha_hora_utc):
+    instante = fecha_hora_utc.astimezone(timezone.utc)
+    parametros = urlencode(
+        {
+            "startTime": instante.strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            ),
+            "sources": "HEK",
+            "format": "tree",
+        }
+    )
+    try:
+        return analizar_hek(_json(f"{HEK_EVENTOS}?{parametros}"))
+    except (
+        HTTPError,
+        URLError,
+        TimeoutError,
+        OSError,
+        json.JSONDecodeError,
+    ) as error:
+        raise ErrorCatalogoRegiones(
+            "No fue posible consultar HEK mediante Helioviewer."
+        ) from error
+
+
+def _combinar(regiones_srs, regiones_hek):
+    por_numero = {region.numero: region for region in regiones_srs}
+
+    for hek in regiones_hek:
+        region = por_numero.get(hek.numero)
+        if region is None:
+            por_numero[hek.numero] = hek
+            continue
+
+        region.fuente_hek = True
+        if hek.hpc_x is not None:
+            region.hpc_x = hek.hpc_x
+        if hek.hpc_y is not None:
+            region.hpc_y = hek.hpc_y
+        if region.manchas is None:
+            region.manchas = hek.manchas
+        if not region.clasificacion:
+            region.clasificacion = hek.clasificacion
+        if not region.clase_magnetica:
+            region.clase_magnetica = hek.clase_magnetica
+
+    return sorted(
+        por_numero.values(),
+        key=lambda region: (
+            -(region.area or 0),
+            int(region.numero),
+        ),
+    )
+
+
+def consultar_regiones(fecha_hora_utc):
+    errores = []
+
+    try:
+        srs = consultar_srs(fecha_hora_utc.date())
+    except ErrorCatalogoRegiones as error:
+        srs = []
+        errores.append(str(error))
+
+    try:
+        hek = consultar_hek(fecha_hora_utc)
+    except ErrorCatalogoRegiones as error:
+        hek = []
+        errores.append(str(error))
+
+    regiones = _combinar(srs, hek)
+    if not regiones and errores:
+        raise ErrorCatalogoRegiones("\n".join(errores))
+    return regiones, errores
+
+
+def _juliano(instante):
+    instante = instante.astimezone(timezone.utc)
+    ano = instante.year
+    mes = instante.month
+    dia = instante.day + (
+        instante.hour
+        + instante.minute / 60
+        + instante.second / 3600
+    ) / 24
+
+    if mes <= 2:
+        ano -= 1
+        mes += 12
+
+    a = math.floor(ano / 100)
+    b = 2 - a + math.floor(a / 4)
+    return (
+        math.floor(365.25 * (ano + 4716))
+        + math.floor(30.6001 * (mes + 1))
+        + dia
+        + b
+        - 1524.5
+    )
+
+
+def _b0(instante):
+    jd = _juliano(instante)
+    n = jd - 2_451_545.0
+    longitud_media = math.radians(
+        (280.460 + 0.9856474 * n) % 360
+    )
+    anomalia = math.radians(
+        (357.528 + 0.9856003 * n) % 360
+    )
+    longitud_sol = longitud_media + math.radians(
+        1.915 * math.sin(anomalia)
+        + 0.020 * math.sin(2 * anomalia)
+    )
+    nodo = math.radians(
+        73.6667
+        + 1.3958333 * ((jd - 2_396_758.0) / 36_525)
+    )
+    inclinacion = math.radians(7.25)
+    return math.asin(
+        math.sin(longitud_sol - nodo)
+        * math.sin(inclinacion)
+    )
+
+
+def _distancia_sol_au(instante):
+    inicio = date(instante.year, 1, 1)
+    dia_ano = (instante.date() - inicio).days + 1
+    anomalia = math.radians(
+        357.529 + 0.98560028 * dia_ano
+    )
+    return (
+        1.00014
+        - 0.01671 * math.cos(anomalia)
+        - 0.00014 * math.cos(2 * anomalia)
+    )
+
+
+def coordenadas_normalizadas(region, instante):
+    if region.hpc_x is not None and region.hpc_y is not None:
+        radio_angular = 959.63 / _distancia_sol_au(instante)
+        x = region.hpc_x / radio_angular
+        y = region.hpc_y / radio_angular
+        if x * x + y * y <= 1.10:
+            return x, y
+
+    if region.latitud is None or region.cmd is None:
+        return None
+
+    cmd = region.cmd
+    if region.referencia_utc is not None:
+        dias = (
+            instante.astimezone(timezone.utc)
+            - region.referencia_utc
+        ).total_seconds() / 86_400
+        cmd += 13.20 * dias
+
+    latitud = math.radians(region.latitud)
+    longitud = math.radians(cmd)
+    b0 = _b0(instante)
+    x = math.cos(latitud) * math.sin(longitud)
+    y = (
+        math.sin(latitud) * math.cos(b0)
+        - math.cos(latitud)
+        * math.cos(longitud)
+        * math.sin(b0)
+    )
+    visible = (
+        math.sin(latitud) * math.sin(b0)
+        + math.cos(latitud)
+        * math.cos(longitud)
+        * math.cos(b0)
+    )
+    if visible < -0.05:
+        return None
+    return x, y
+
+
+def posicion_en_imagen(
+    region,
+    instante,
+    centro_x,
+    centro_y,
+    radio,
+    rotacion=0.0,
+    espejo_horizontal=False,
+    espejo_vertical=False,
+):
+    normalizadas = coordenadas_normalizadas(region, instante)
+    if normalizadas is None:
+        return None
+
+    x, y_solar = normalizadas
+    dx = x * radio
+    dy = -y_solar * radio
+
+    if espejo_horizontal:
+        dx *= -1
+    if espejo_vertical:
+        dy *= -1
+
+    angulo = math.radians(rotacion)
+    coseno = math.cos(angulo)
+    seno = math.sin(angulo)
+    x_rotado = coseno * dx - seno * dy
+    y_rotado = seno * dx + coseno * dy
+    return centro_x + x_rotado, centro_y + y_rotado
+
+
+def tamano_region_en_imagen(region, radio):
+    extension = max(2.0, float(region.extension or 4.0))
+    ancho = 2 * radio * math.sin(
+        math.radians(extension) / 2
+    )
+
+    if region.area:
+        por_area = 2 * radio * math.sqrt(
+            min(region.area / 1_000_000, 0.02)
+        )
+        ancho = max(ancho, por_area)
+
+    ancho = min(max(ancho, radio * 0.035), radio * 0.35)
+    alto = max(ancho * 0.68, radio * 0.025)
+    return ancho, alto
+
+
+def _parsear_instante(valor):
+    if valor is None:
+        return None
+    texto = str(valor).strip().replace("Z", "+00:00")
+    formatos = (
+        "%Y:%m:%d %H:%M:%S",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y%m%d_%H%M%S",
+        "%Y-%m-%d-%H%M",
+        "%Y-%m-%d_%H%M",
+    )
+
+    try:
+        instante = datetime.fromisoformat(texto)
+    except ValueError:
+        instante = None
+
+    if instante is None:
+        for formato in formatos:
+            try:
+                instante = datetime.strptime(texto, formato)
+                break
+            except ValueError:
+                continue
+
+    if instante is None:
+        return None
+    if instante.tzinfo is None:
+        instante = instante.replace(tzinfo=timezone.utc)
+    return instante.astimezone(timezone.utc)
+
+
+def leer_fecha_hora_imagen(ruta):
+    ruta = Path(ruta)
+
+    if ruta.suffix.lower() in {".fit", ".fits", ".fts"}:
+        try:
+            from astropy.io import fits
+
+            encabezado = fits.getheader(ruta)
+            for clave in ("DATE-OBS", "DATEOBS"):
+                instante = _parsear_instante(
+                    encabezado.get(clave)
+                )
+                if instante is not None:
+                    return instante, "FITS"
+        except Exception:
+            pass
+
+    try:
+        with Image.open(ruta) as imagen:
+            exif = {
+                ExifTags.TAGS.get(clave, clave): valor
+                for clave, valor in imagen.getexif().items()
+            }
+            combinados = {**imagen.info, **exif}
+            for clave in (
+                "DateTimeOriginal",
+                "DateTimeDigitized",
+                "DateTime",
+                "DATE-OBS",
+            ):
+                instante = _parsear_instante(
+                    combinados.get(clave)
+                )
+                if instante is not None:
+                    return instante, "EXIF"
+    except Exception:
+        pass
+
+    nombre = ruta.stem
+    patrones = (
+        r"(?P<fecha>\d{4}-\d{2}-\d{2})[-_ ]"
+        r"(?P<hora>\d{2})(?P<minuto>\d{2})(?P<segundo>\d{2})?",
+        r"(?P<fecha>\d{8})[-_ ]"
+        r"(?P<hora>\d{2})(?P<minuto>\d{2})(?P<segundo>\d{2})?",
+    )
+    for patron in patrones:
+        coincidencia = re.search(patron, nombre)
+        if coincidencia is None:
+            continue
+        fecha_texto = coincidencia.group("fecha").replace("-", "")
+        segundo = coincidencia.group("segundo") or "00"
+        instante = datetime.strptime(
+            (
+                f"{fecha_texto}"
+                f"{coincidencia.group('hora')}"
+                f"{coincidencia.group('minuto')}{segundo}"
+            ),
+            "%Y%m%d%H%M%S",
+        ).replace(tzinfo=timezone.utc)
+        return instante, "nombre de archivo"
+
+    return datetime.now(timezone.utc), "fecha actual"

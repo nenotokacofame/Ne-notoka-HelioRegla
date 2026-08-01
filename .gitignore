@@ -2,5 +2,10 @@
 __pycache__/
 *.pyc
 .vscode/
+.venv_instalador/
+build_instalador/
+dist/
+dist_instalador/
+licencias_terceros/
 proyectos/*
 !proyectos/.gitkeep

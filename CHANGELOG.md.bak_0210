@@ -1,20 +1,5 @@
 ﻿# Historial de cambios
 
-## 1.0.0
-
-- Primera versión estable de distribución pública para Windows.
-- Autoría oficial actualizada a **David Olivos S. / Ne-notoka Cofame**.
-- Nueva Licencia de uso gratuito Ne-notoka HelioRegla 1.0: permite el uso
-  gratuito y compartir el instalador oficial intacto, pero no modificar,
-  descompilar, vender ni redistribuir versiones alteradas.
-- Se declara expresamente que las fotografías, proyectos, mediciones y
-  exportaciones pertenecen a sus usuarios.
-- Enlace oficial de apoyo integrado: `https://paypal.me/nenotokacofame`.
-- Rutas de recursos compatibles con ejecución empaquetada mediante PyInstaller.
-- Construcción automatizada con PyInstaller e Inno Setup: instalador bilingüe,
-  icono Ne-notoka, accesos directos, licencia visible y desinstalador.
-- Avisos y licencias de componentes de terceros incluidos en la distribución.
-
 ## 0.21.0
 
 - Corregida la conversión involuntaria de UTC a la zona horaria local en el
@@ -26,10 +11,11 @@
 - La referencia anotada dimensiona cada óvalo mediante el área y extensión
   publicadas por NOAA, en lugar de dibujar círculos idénticos.
 - Nueva sección **Ayuda** con Acerca de, licencia y apoyo al proyecto.
+- Adoptada la licencia de software libre GNU GPL 3 o posterior.
 - Añadidos `README.md` y `LICENSE` para preparar la distribución pública.
 - La sección de apoyo explica que los donativos son voluntarios y no
   desbloquean funciones; el enlace directo de PayPal queda preparado para el
-  distribución 1.0.
+  instalador 1.0.
 
 ## 0.20.1
 

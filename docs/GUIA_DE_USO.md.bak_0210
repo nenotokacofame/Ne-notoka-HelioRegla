@@ -290,14 +290,11 @@ estar todavía en el informe diario.
 El menú **Ayuda** abre tres secciones:
 
 - **Acerca de:** versión, autor, proyecto y créditos de las fuentes solares.
-- **Licencia:** texto completo de la Licencia de uso gratuito Ne-notoka
-  HelioRegla 1.0. Permite usar el programa y compartir su instalador oficial
-  intacto, pero no modificarlo ni redistribuir versiones alteradas.
-- Las fotografías, proyectos, mediciones y exportaciones pertenecen a sus
-  usuarios.
+- **Licencia:** texto completo de GNU GPL versión 3. Ne-notoka HelioRegla es
+  software libre y se publica bajo `GPL-3.0-or-later`.
 - **Apoyar:** invitación opcional para contribuir al desarrollo, el sitio web
   y las actividades de divulgación de Ne-notoka Cofame.
 
 Los donativos no desbloquean herramientas ni cambian las funciones del
-programa. La sección incluye el enlace oficial
-`https://paypal.me/nenotokacofame` y permite copiar el correo de contacto.
+programa. Mientras se integra el enlace definitivo de PayPal en el instalador
+1.0, la sección permite copiar el correo de contacto del proyecto.

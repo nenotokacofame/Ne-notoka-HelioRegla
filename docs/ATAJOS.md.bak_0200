@@ -77,11 +77,6 @@ trazar otro. Las curvas y resultados anteriores permanecen visibles.
 ## Regiones activas
 
 - **Consultar regiones NOAA/HEK:** busca las AR de la fecha y hora UTC.
-- La fecha se busca en este orden: `DATE-OBS` de FITS, nombre del archivo,
-  EXIF y, solo como último recurso, fecha actual. Revisa el fragmento mostrado
-  en el diálogo antes de consultar.
-- La hora escrita en el nombre se conserva como UTC sin convertirla a la zona
-  local; `2218` se muestra como `22:18 UTC`.
 - **Alinear automáticamente:** compara la fotografía con HMI, GONG H-alpha y
   AIA 1700 Å; reconoce orientación normal o invertida. Solo modifica la
   orientación cuando la confianza es alta.
@@ -170,12 +165,3 @@ Todos los planetas se recalculan al modificar la calibración.
 - El cambio se aplica inmediatamente y se recuerda al volver a abrir el
   programa.
 - Las anotaciones existentes se recalculan en el idioma seleccionado.
-
-## Ayuda y distribución
-
-- **Ayuda > Acerca de HelioRegla:** identidad, versión y créditos.
-- **Ayuda > Licencia de uso:** permite utilizar gratuitamente HelioRegla y
-  compartir su instalador oficial intacto; no autoriza modificaciones ni
-  versiones alteradas.
-- **Ayuda > Apoyar el proyecto:** abre el enlace oficial de PayPal y muestra
-  el contacto de Ne-notoka Cofame.

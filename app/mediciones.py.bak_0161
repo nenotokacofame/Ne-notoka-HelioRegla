@@ -41,6 +41,10 @@ class EtiquetaMedicion(QGraphicsSimpleTextItem):
         super().__init__()
         self.medicion = medicion
         self.setCursor(Qt.PointingHandCursor)
+        self.setFlag(
+            QGraphicsItem.ItemIgnoresTransformations,
+            True,
+        )
 
     def mousePressEvent(self, event):
         if event.button() == Qt.RightButton:

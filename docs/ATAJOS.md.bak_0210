@@ -174,8 +174,6 @@ Todos los planetas se recalculan al modificar la calibración.
 ## Ayuda y distribución
 
 - **Ayuda > Acerca de HelioRegla:** identidad, versión y créditos.
-- **Ayuda > Licencia de uso:** permite utilizar gratuitamente HelioRegla y
-  compartir su instalador oficial intacto; no autoriza modificaciones ni
-  versiones alteradas.
-- **Ayuda > Apoyar el proyecto:** abre el enlace oficial de PayPal y muestra
-  el contacto de Ne-notoka Cofame.
+- **Ayuda > Licencia de software libre:** GNU GPL 3 o posterior.
+- **Ayuda > Apoyar el proyecto:** información de donativos voluntarios y
+  contacto de Ne-notoka Cofame.

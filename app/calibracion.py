@@ -4,7 +4,7 @@ from math import cos, pi, radians, tan
 from pathlib import Path
 
 from PIL import ExifTags, Image
-from PySide6.QtCore import QDate
+from PySide6.QtCore import QDate, QSettings
 from PySide6.QtWidgets import (
     QDateEdit,
     QDialog,
@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QVBoxLayout,
 )
+from i18n import tr
 
 
 AU_KM = 149_597_870.7
@@ -113,14 +114,16 @@ def leer_metadatos(ruta):
                     ("FOCALLEN", "FOCALLENGTH", "FOCAL"),
                 )
             )
-            datos.binning = int(
-                _numero(
-                    _buscar(
-                        encabezado,
-                        ("XBINNING", "BINNING"),
-                    )
+            valor_binning = _numero(
+                _buscar(
+                    encabezado,
+                    ("XBINNING", "BINNING"),
                 )
-                or 1
+            )
+            datos.binning = (
+                int(valor_binning)
+                if valor_binning is not None
+                else None
             )
             datos.escala_arcsec = _numero(
                 _buscar(
@@ -173,14 +176,16 @@ def leer_metadatos(ruta):
                     ("XPIXSZ", "PIXSIZE", "PIXELSIZE"),
                 )
             )
-            datos.binning = int(
-                _numero(
-                    _buscar(
-                        combinados,
-                        ("XBINNING", "BINNING"),
-                    )
+            valor_binning = _numero(
+                _buscar(
+                    combinados,
+                    ("XBINNING", "BINNING"),
                 )
-                or 1
+            )
+            datos.binning = (
+                int(valor_binning)
+                if valor_binning is not None
+                else None
             )
             datos.escala_arcsec = _numero(
                 _buscar(
@@ -253,11 +258,16 @@ class DialogoCalibracion(QDialog):
         self.escala_limbo = escala_limbo
         self.resultado = None
         self.metadatos = leer_metadatos(ruta_imagen)
+        self.ajustes = QSettings(
+            "Ne-notoka Cofame",
+            "Ne-notoka HelioRegla",
+        )
 
-        self.setWindowTitle("Calibración mediante el equipo")
+        self.setWindowTitle(tr("equipment_dialog"))
         self.setMinimumWidth(520)
 
         self.crear_interfaz()
+        self.cargar_ultimos_datos()
         self.cargar_metadatos()
         self.calcular()
 
@@ -277,7 +287,7 @@ class DialogoCalibracion(QDialog):
         self.info_metadatos.setWordWrap(True)
         principal.addWidget(self.info_metadatos)
 
-        grupo = QGroupBox("Datos de calibración")
+        grupo = QGroupBox(tr("calibration_data"))
         formulario = QFormLayout(grupo)
 
 
@@ -304,14 +314,14 @@ class DialogoCalibracion(QDialog):
         self.fecha.setDate(QDate.currentDate())
         self.fecha.dateChanged.connect(self.calcular)
 
-        formulario.addRow("Tamaño de píxel:", self.pixel)
-        formulario.addRow("Focal efectiva:", self.focal)
-        formulario.addRow("Binning:", self.binning)
+        formulario.addRow(tr("pixel_size"), self.pixel)
+        formulario.addRow(tr("effective_focal"), self.focal)
+        formulario.addRow(tr("binning"), self.binning)
         formulario.addRow(
-            "Tamaño final de imagen:",
+            tr("final_image_size"),
             self.redimension,
         )
-        formulario.addRow("Fecha de captura:", self.fecha)
+        formulario.addRow(tr("capture_date"), self.fecha)
 
         principal.addWidget(grupo)
 
@@ -323,12 +333,16 @@ class DialogoCalibracion(QDialog):
         )
         principal.addWidget(self.resultados)
 
-        detectar = QPushButton("Volver a leer metadatos")
+        detectar = QPushButton(tr("reread_metadata"))
         detectar.clicked.connect(self.cargar_metadatos)
         principal.addWidget(detectar)
 
         botones = QDialogButtonBox(
             QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        )
+        botones.button(QDialogButtonBox.Ok).setText(tr("ok"))
+        botones.button(QDialogButtonBox.Cancel).setText(
+            tr("cancel")
         )
         botones.accepted.connect(self.aceptar)
         botones.rejected.connect(self.reject)
@@ -354,17 +368,73 @@ class DialogoCalibracion(QDialog):
             )
 
         equipo = (
-            f"\nEquipo: {datos.equipo}"
+            f"\n{tr('equipment')}: {datos.equipo}"
             if datos.equipo
             else ""
         )
+        fuentes = {
+            "Encabezado FITS": tr("metadata_fits"),
+            "EXIF/metadatos de imagen": tr("metadata_exif"),
+            "Sin metadatos técnicos reconocidos": (
+                tr("no_metadata")
+            ),
+            "Sin metadatos reconocidos": tr("no_metadata"),
+        }
+        fuente = fuentes.get(datos.fuente, datos.fuente)
         self.info_metadatos.setText(
-            f"Fuente: {datos.fuente}{equipo}\n"
-            "Verifica siempre los valores: algunos programas "
-            "conservan la focal original aunque la imagen haya "
-            "sido redimensionada."
+            f"{tr('source')}: {fuente}{equipo}\n"
+            f"{tr('verify_values')}"
         )
         self.calcular()
+
+    def cargar_ultimos_datos(self):
+        self.pixel.setValue(
+            self.ajustes.value(
+                "calibracion/pixel_um",
+                2.9,
+                type=float,
+            )
+        )
+        self.focal.setValue(
+            self.ajustes.value(
+                "calibracion/focal_mm",
+                250.0,
+                type=float,
+            )
+        )
+        self.binning.setValue(
+            self.ajustes.value(
+                "calibracion/binning",
+                1,
+                type=int,
+            )
+        )
+        self.redimension.setValue(
+            self.ajustes.value(
+                "calibracion/redimension",
+                100.0,
+                type=float,
+            )
+        )
+
+    def guardar_datos_equipo(self):
+        self.ajustes.setValue(
+            "calibracion/pixel_um",
+            self.pixel.value(),
+        )
+        self.ajustes.setValue(
+            "calibracion/focal_mm",
+            self.focal.value(),
+        )
+        self.ajustes.setValue(
+            "calibracion/binning",
+            self.binning.value(),
+        )
+        self.ajustes.setValue(
+            "calibracion/redimension",
+            self.redimension.value(),
+        )
+        self.ajustes.sync()
 
     def calcular(self):
         fecha_qt = self.fecha.date()
@@ -383,7 +453,7 @@ class DialogoCalibracion(QDialog):
         if pixel <= 0 or focal <= 0 or proporcion <= 0:
             self.resultado = None
             self.resultados.setText(
-                "Introduce tamaño de píxel y focal efectiva."
+                tr("enter_pixel_focal")
             )
             return
 
@@ -397,7 +467,8 @@ class DialogoCalibracion(QDialog):
         descripcion = (
             f"{pixel:.4f} µm · {focal:.2f} mm · "
             f"binning {binning} · "
-            f"imagen {self.redimension.value():.1f}%"
+            f"{tr('image_word')} "
+            f"{self.redimension.value():.1f}%"
         )
 
         comparacion = ""
@@ -409,23 +480,24 @@ class DialogoCalibracion(QDialog):
                 * 100
             )
             comparacion = (
-                f"\nEscala por limbo: "
+                f"\n{tr('limb_scale')}: "
                 f"{self.escala_limbo:,.2f} km/px"
-                f"\nDiferencia: {diferencia:+.2f}%"
+                f"\n{tr('difference')}: {diferencia:+.2f}%"
             )
 
         self.resultado = ResultadoCalibracion(
             km_por_pixel=km_px,
             arcsec_por_pixel=arcsec_px,
             distancia_sol_km=distancia,
-            metodo="Datos ópticos del equipo",
+            metodo=tr("optical_data"),
             descripcion=descripcion,
         )
 
         self.resultados.setText(
-            f"Escala angular: {arcsec_px:.5f} ″/px\n"
-            f"Distancia al Sol: {distancia:,.0f} km\n"
-            f"Escala física: {km_px:,.2f} km/px"
+            f"{tr('angular_scale')}: "
+            f"{arcsec_px:.5f} ″/px\n"
+            f"{tr('sun_distance')}: {distancia:,.0f} km\n"
+            f"{tr('physical_scale')}: {km_px:,.2f} km/px"
             f"{comparacion}"
         )
 
@@ -433,4 +505,5 @@ class DialogoCalibracion(QDialog):
         self.calcular()
 
         if self.resultado is not None:
+            self.guardar_datos_equipo()
             self.accept()

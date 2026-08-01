@@ -15,7 +15,6 @@ from PySide6.QtGui import (
     QPixmap,
 )
 from ajuste_parcial import ajustar_limbo_parcial
-from acerca_de import DialogoAcercaDe
 from calibracion import DialogoCalibracion
 from comparaciones import (
     ComparacionPlaneta,
@@ -34,11 +33,10 @@ from dialogos_regiones import (
     DialogoConsultaRegiones,
     DialogoResultadosRegiones,
 )
-from dialogo_referencia import DialogoReferenciaSolar
 from filamentos import MedicionFilamento, PuntoFilamento
 from i18n import establecer_idioma, tr
 from limbo import CirculoLimbo
-from manchas import EtiquetaMancha, acomodar_etiquetas
+from manchas import EtiquetaMancha
 from mediciones import MedicionProtuberancia
 from proyectos import (
     ErrorProyecto,
@@ -46,13 +44,6 @@ from proyectos import (
     leer_proyecto,
     referencias_imagen,
     resolver_imagen,
-)
-from referencia_solar import (
-    ErrorReferenciaSolar,
-    crear_referencia_anotada,
-    descargar_referencias,
-    refinar_posiciones_regiones,
-    registrar_orientacion,
 )
 from regla_solar import ReglaSolar
 
@@ -84,25 +75,10 @@ from PySide6.QtWidgets import (
 
 
 NOMBRE_APLICACION = "Ne-notoka HelioRegla"
-
-
-def ruta_base_aplicacion():
-    """Devuelve la raíz de recursos en desarrollo o en PyInstaller."""
-    if getattr(sys, "frozen", False):
-        return Path(
-            getattr(
-                sys,
-                "_MEIPASS",
-                Path(sys.executable).resolve().parent,
-            )
-        )
-    return Path(__file__).resolve().parent.parent
-
-
-RUTA_PROYECTO = ruta_base_aplicacion()
+RUTA_PROYECTO = Path(__file__).resolve().parent.parent
 RUTA_LOGO = RUTA_PROYECTO / "assets" / "logo_ne_notoka.png"
 RUTA_ICONO = RUTA_PROYECTO / "assets" / "icono_ne_notoka.ico"
-VERSION = "1.0.0"
+VERSION = "0.18.0"
 
 
 class VisorSolar(QGraphicsView):
@@ -757,16 +733,8 @@ class VentanaPrincipal(QMainWindow):
             True,
             type=bool,
         )
-        self.fuente_referencia_catalogo = self.ajustes.value(
-            "catalogo/fuente_referencia",
-            "automatica",
-            type=str,
-        )
         self.ultimas_regiones_catalogo = []
         self.instante_catalogo = None
-        self.ruta_referencia_catalogo = None
-        self.nombre_fuente_referencia_catalogo = ""
-        self.detalle_alineacion_catalogo = ""
 
         self.visor = VisorSolar()
         self.visor.imagen_cargada.connect(
@@ -949,17 +917,6 @@ class VentanaPrincipal(QMainWindow):
         self.boton_detectar_manchas.clicked.connect(
             self.consultar_catalogos_regiones
         )
-
-        self.boton_referencia_solar = QPushButton(
-            "Ver referencia solar anotada"
-        )
-        self.boton_referencia_solar.setObjectName(
-            "botonContextual"
-        )
-        self.boton_referencia_solar.clicked.connect(
-            self.mostrar_referencia_solar
-        )
-        self.boton_referencia_solar.setVisible(False)
 
         self.boton_aceptar_filamento = QPushButton(
             "Aceptar medición"
@@ -1150,6 +1107,22 @@ class VentanaPrincipal(QMainWindow):
         self.etiqueta_archivo.setWordWrap(True)
         self.etiqueta_archivo.setObjectName("informacion")
 
+        separador = QFrame()
+        separador.setFrameShape(QFrame.HLine)
+        separador.setObjectName("separador")
+
+        self.etiqueta_proximamente = QLabel(
+            "Próximas herramientas\n\n"
+            "• Ajuste del limbo\n"
+            "• Regla solar\n"
+            "• Medición de estructuras\n"
+            "• Comparación planetaria\n"
+            "• Etiquetado de regiones"
+        )
+        
+        self.etiqueta_proximamente.setObjectName("proximamente")
+        self.etiqueta_proximamente.setWordWrap(True)
+
         self.etiqueta_ayuda = QLabel(
             "Rueda: zoom\n"
             "Arrastrar: desplazar\n"
@@ -1197,11 +1170,6 @@ class VentanaPrincipal(QMainWindow):
             Qt.AlignHCenter,
         )
         panel_layout.addWidget(self.boton_detectar_manchas)
-        panel_layout.addWidget(
-            self.boton_referencia_solar,
-            0,
-            Qt.AlignHCenter,
-        )
         panel_layout.addWidget(self.boton_mancha)
         panel_layout.addWidget(self.boton_borrar_mediciones)
         panel_layout.addWidget(self.seccion_visualizacion)
@@ -1238,6 +1206,8 @@ class VentanaPrincipal(QMainWindow):
 
         panel_layout.addWidget(self.etiqueta_archivo)
         panel_layout.addWidget(self.etiqueta_medicion)
+        panel_layout.addWidget(separador)
+        panel_layout.addWidget(self.etiqueta_proximamente)
         panel_layout.addStretch()
         panel_layout.addWidget(self.etiqueta_ayuda)
 
@@ -1547,37 +1517,6 @@ class VentanaPrincipal(QMainWindow):
         self.boton_menu_idioma.setMenu(self.menu_idioma)
         barra.addWidget(self.boton_menu_idioma)
 
-        self.menu_ayuda = QMenu(self)
-        self.accion_acerca_de = QAction(self)
-        self.accion_acerca_de.triggered.connect(
-            lambda comprobado=False:
-            self.mostrar_acerca_de(0)
-        )
-        self.accion_licencia = QAction(self)
-        self.accion_licencia.triggered.connect(
-            lambda comprobado=False:
-            self.mostrar_acerca_de(1)
-        )
-        self.accion_apoyar = QAction(self)
-        self.accion_apoyar.triggered.connect(
-            lambda comprobado=False:
-            self.mostrar_acerca_de(2)
-        )
-        self.menu_ayuda.addAction(self.accion_acerca_de)
-        self.menu_ayuda.addAction(self.accion_licencia)
-        self.menu_ayuda.addSeparator()
-        self.menu_ayuda.addAction(self.accion_apoyar)
-
-        self.boton_menu_ayuda = QToolButton()
-        self.boton_menu_ayuda.setToolButtonStyle(
-            Qt.ToolButtonTextBesideIcon
-        )
-        self.boton_menu_ayuda.setPopupMode(
-            QToolButton.InstantPopup
-        )
-        self.boton_menu_ayuda.setMenu(self.menu_ayuda)
-        barra.addWidget(self.boton_menu_ayuda)
-
     def cambiar_idioma(self, idioma):
         if idioma == self.idioma:
             return
@@ -1632,14 +1571,6 @@ class VentanaPrincipal(QMainWindow):
             if not numero:
                 continue
             lineas = [f"AR {numero}"]
-            clase_magnetica = datos.get("clase_magnetica")
-            if clase_magnetica:
-                lineas.append(
-                    tr(
-                        "magnetic_class_short",
-                        value=clase_magnetica,
-                    )
-                )
             manchas = datos.get("manchas")
             if (
                 self.mostrar_conteo_manchas
@@ -1657,7 +1588,6 @@ class VentanaPrincipal(QMainWindow):
                 )
             etiqueta.establecer_nombre("\n".join(lineas))
 
-        acomodar_etiquetas(self.etiquetas_manchas)
         self.statusBar().showMessage(tr("language_changed"))
 
     def aplicar_idioma(self):
@@ -1682,9 +1612,6 @@ class VentanaPrincipal(QMainWindow):
         self.boton_filamento.setText(tr("measure_filament"))
         self.boton_detectar_manchas.setText(
             tr("detect_sunspots")
-        )
-        self.boton_referencia_solar.setText(
-            tr("view_solar_reference")
         )
         self.boton_mancha.setText(tr("label_sunspot"))
         self.boton_aceptar_filamento.setText(
@@ -1716,6 +1643,7 @@ class VentanaPrincipal(QMainWindow):
         self.seccion_visualizacion.setText(
             tr("visualization")
         )
+        self.etiqueta_proximamente.setText(tr("coming_soon"))
         self.etiqueta_ayuda.setText(tr("help"))
         self.encabezado_area.setText(tr("solar_workspace"))
 
@@ -1794,10 +1722,6 @@ class VentanaPrincipal(QMainWindow):
         self.boton_menu_idioma.setText(tr("language"))
         self.accion_espanol.setText(tr("spanish"))
         self.accion_english.setText(tr("english"))
-        self.boton_menu_ayuda.setText(tr("help_menu"))
-        self.accion_acerca_de.setText(tr("about_app"))
-        self.accion_licencia.setText(tr("license_action"))
-        self.accion_apoyar.setText(tr("support_project"))
 
         for indice in range(
             self.selector_intervalo_regla.count()
@@ -1843,15 +1767,6 @@ class VentanaPrincipal(QMainWindow):
         estado = QStatusBar()
         estado.showMessage(tr("ready"))
         self.setStatusBar(estado)
-
-    def mostrar_acerca_de(self, pestana=0):
-        DialogoAcercaDe(
-            VERSION,
-            RUTA_LOGO,
-            RUTA_PROYECTO / "LICENSE",
-            pestana=pestana,
-            parent=self,
-        ).exec()
 
     def abrir_imagen(self):
         ultima_carpeta = self.ajustes.value(
@@ -2061,9 +1976,6 @@ class VentanaPrincipal(QMainWindow):
                     self.espejo_vertical_catalogo
                 ),
                 "mostrar_conteo": self.mostrar_conteo_manchas,
-                "fuente_alineacion": (
-                    self.fuente_referencia_catalogo
-                ),
                 "instante_utc": (
                     self.instante_catalogo.isoformat()
                     if self.instante_catalogo is not None
@@ -2276,10 +2188,6 @@ class VentanaPrincipal(QMainWindow):
                     "mostrar_conteo",
                     self.mostrar_conteo_manchas,
                 )
-            )
-            self.fuente_referencia_catalogo = catalogo.get(
-                "fuente_alineacion",
-                self.fuente_referencia_catalogo,
             )
 
             datos_limbo = datos.get("limbo")
@@ -3225,17 +3133,9 @@ class VentanaPrincipal(QMainWindow):
                 self.color_anotaciones,
                 self.tamano_anotaciones,
             )
-        acomodar_etiquetas(self.etiquetas_manchas)
 
     def _nombre_region_catalogo(self, region):
         lineas = [region.nombre]
-        if region.clase_magnetica:
-            lineas.append(
-                tr(
-                    "magnetic_class_short",
-                    value=region.clase_magnetica,
-                )
-            )
         if (
             self.mostrar_conteo_manchas
             and region.manchas is not None
@@ -3289,10 +3189,6 @@ class VentanaPrincipal(QMainWindow):
             ),
             espejo_vertical=self.espejo_vertical_catalogo,
             mostrar_manchas=self.mostrar_conteo_manchas,
-            fuente_referencia=self.fuente_referencia_catalogo,
-            puede_alinear=(
-                self.visor.circulo_limbo is not None
-            ),
             parent=self,
         )
 
@@ -3311,12 +3207,6 @@ class VentanaPrincipal(QMainWindow):
         self.mostrar_conteo_manchas = (
             dialogo.mostrar_manchas.isChecked()
         )
-        alinear_automaticamente = (
-            dialogo.alinear_automaticamente.isChecked()
-        )
-        self.fuente_referencia_catalogo = (
-            dialogo.fuente_referencia.currentData()
-        )
         self.ajustes.setValue(
             "catalogo/rotacion",
             self.rotacion_catalogo,
@@ -3332,10 +3222,6 @@ class VentanaPrincipal(QMainWindow):
         self.ajustes.setValue(
             "catalogo/mostrar_conteo",
             self.mostrar_conteo_manchas,
-        )
-        self.ajustes.setValue(
-            "catalogo/fuente_referencia",
-            self.fuente_referencia_catalogo,
         )
 
         QApplication.setOverrideCursor(Qt.WaitCursor)
@@ -3373,128 +3259,9 @@ class VentanaPrincipal(QMainWindow):
             return
 
         self.ultimas_regiones_catalogo = regiones
-        errores_referencia = []
-        detalle_alineacion = ""
-
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        self.statusBar().showMessage(
-            tr("downloading_solar_references")
-        )
-        try:
-            referencias, errores_referencia = (
-                descargar_referencias(
-                    instante,
-                    self.fuente_referencia_catalogo,
-                )
-            )
-            circulo = self.visor.circulo_limbo
-            resultado_registro = None
-
-            if (
-                alinear_automaticamente
-                and circulo is not None
-                and self.visor.ruta_imagen is not None
-            ):
-                resultado_registro = registrar_orientacion(
-                    self.visor.ruta_imagen,
-                    circulo.pos().x(),
-                    circulo.pos().y(),
-                    circulo.radio,
-                    referencias,
-                )
-                confianza = tr(
-                    "alignment_confidence_"
-                    f"{resultado_registro.confianza}"
-                )
-                if resultado_registro.confianza == "alta":
-                    self.rotacion_catalogo = (
-                        resultado_registro.rotacion
-                    )
-                    self.espejo_horizontal_catalogo = (
-                        resultado_registro.espejo_horizontal
-                    )
-                    self.espejo_vertical_catalogo = (
-                        resultado_registro.espejo_vertical
-                    )
-                    detalle_alineacion = tr(
-                        "automatic_alignment_applied",
-                        source=(
-                            resultado_registro.referencia.fuente.nombre
-                        ),
-                        rotation=self.rotacion_catalogo,
-                        confidence=confianza,
-                    )
-                else:
-                    detalle_alineacion = tr(
-                        "automatic_alignment_low",
-                        source=(
-                            resultado_registro.referencia.fuente.nombre
-                        ),
-                        confidence=confianza,
-                    )
-
-            referencia_elegida = (
-                resultado_registro.referencia
-                if resultado_registro is not None
-                else referencias[0]
-            )
-            refinadas = refinar_posiciones_regiones(
-                referencia_elegida,
-                regiones,
-                instante,
-            )
-            self.ruta_referencia_catalogo = (
-                crear_referencia_anotada(
-                    referencia_elegida,
-                    regiones,
-                    instante,
-                    mostrar_conteo=self.mostrar_conteo_manchas,
-                )
-            )
-            self.nombre_fuente_referencia_catalogo = (
-                referencia_elegida.fuente.nombre
-            )
-            if detalle_alineacion:
-                detalle_alineacion += " "
-            detalle_alineacion += tr(
-                "catalog_local_refinement",
-                refined=refinadas,
-                total=len(regiones),
-            )
-            self.detalle_alineacion_catalogo = (
-                detalle_alineacion
-            )
-            self.boton_referencia_solar.setVisible(True)
-        except ErrorReferenciaSolar as error:
-            errores_referencia.append(str(error))
-            detalle_alineacion = tr(
-                "automatic_alignment_unavailable"
-            )
-        except (OSError, ValueError) as error:
-            errores_referencia.append(str(error))
-            detalle_alineacion = tr(
-                "automatic_alignment_unavailable"
-            )
-        finally:
-            QApplication.restoreOverrideCursor()
-
-        self.ajustes.setValue(
-            "catalogo/rotacion",
-            self.rotacion_catalogo,
-        )
-        self.ajustes.setValue(
-            "catalogo/espejo_horizontal",
-            self.espejo_horizontal_catalogo,
-        )
-        self.ajustes.setValue(
-            "catalogo/espejo_vertical",
-            self.espejo_vertical_catalogo,
-        )
-
         resultados = DialogoResultadosRegiones(
             regiones,
-            errores=errores + errores_referencia,
-            detalle_alineacion=detalle_alineacion,
+            errores=errores,
             parent=self,
         )
 
@@ -3601,8 +3368,6 @@ class VentanaPrincipal(QMainWindow):
         finally:
             self.suspendiendo_historial = False
 
-        acomodar_etiquetas(self.etiquetas_manchas)
-
         self.statusBar().showMessage(
             tr(
                 "catalog_regions_added",
@@ -3610,25 +3375,6 @@ class VentanaPrincipal(QMainWindow):
                 skipped=fuera,
             )
         )
-
-    def mostrar_referencia_solar(self):
-        if (
-            self.ruta_referencia_catalogo is None
-            or not Path(self.ruta_referencia_catalogo).exists()
-        ):
-            QMessageBox.information(
-                self,
-                tr("solar_reference_title"),
-                tr("solar_reference_unavailable"),
-            )
-            return
-
-        DialogoReferenciaSolar(
-            self.ruta_referencia_catalogo,
-            self.nombre_fuente_referencia_catalogo,
-            self.detalle_alineacion_catalogo,
-            parent=self,
-        ).exec()
 
     def iniciar_etiquetado_mancha(self):
         if self.visor.elemento_imagen is None:
@@ -4695,10 +4441,6 @@ class VentanaPrincipal(QMainWindow):
         self.etiquetas_manchas.clear()
         self.ultimas_regiones_catalogo.clear()
         self.instante_catalogo = None
-        self.ruta_referencia_catalogo = None
-        self.nombre_fuente_referencia_catalogo = ""
-        self.detalle_alineacion_catalogo = ""
-        self.boton_referencia_solar.setVisible(False)
         self.filamento_en_curso = None
         self.ruta_proyecto_actual = None
         self.comparacion_tierra_luna = None

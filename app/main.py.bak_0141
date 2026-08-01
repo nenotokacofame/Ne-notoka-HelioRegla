@@ -4,8 +4,6 @@ from pathlib import Path
 from PySide6.QtCore import QPointF, QRectF, Qt, QSettings, Signal
 from PySide6.QtGui import (
     QAction,
-    QActionGroup,
-    QBrush,
     QColor,
     QIcon,
     QImage,
@@ -15,30 +13,11 @@ from PySide6.QtGui import (
     QPixmap,
 )
 from ajuste_parcial import ajustar_limbo_parcial
-from acerca_de import DialogoAcercaDe
 from calibracion import DialogoCalibracion
-from comparaciones import (
-    ComparacionPlaneta,
-    ComparacionTierraLuna,
-    PLANETAS,
-)
-from catalogo_regiones import (
-    ErrorCatalogoRegiones,
-    consultar_regiones,
-    leer_fecha_hora_imagen,
-    posicion_en_imagen,
-    tamano_region_en_imagen,
-)
+from comparaciones import ComparacionTierraLuna
 from detector_limbo import detectar_limbo, ErrorDeteccionLimbo
-from dialogos_regiones import (
-    DialogoConsultaRegiones,
-    DialogoResultadosRegiones,
-)
-from dialogo_referencia import DialogoReferenciaSolar
 from filamentos import MedicionFilamento, PuntoFilamento
-from i18n import establecer_idioma, tr
 from limbo import CirculoLimbo
-from manchas import EtiquetaMancha, acomodar_etiquetas
 from mediciones import MedicionProtuberancia
 from proyectos import (
     ErrorProyecto,
@@ -47,19 +26,11 @@ from proyectos import (
     referencias_imagen,
     resolver_imagen,
 )
-from referencia_solar import (
-    ErrorReferenciaSolar,
-    crear_referencia_anotada,
-    descargar_referencias,
-    refinar_posiciones_regiones,
-    registrar_orientacion,
-)
 from regla_solar import ReglaSolar
 
 from PySide6.QtWidgets import (
     QApplication,
     QColorDialog,
-    QDialog,
     QFileDialog,
     QFrame,
     QGraphicsEllipseItem,
@@ -67,42 +38,24 @@ from PySide6.QtWidgets import (
     QGraphicsScene,
     QGraphicsView,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
     QMainWindow,
-    QMenu,
     QMessageBox,
     QPushButton,
     QComboBox,
     QScrollArea,
     QStatusBar,
     QToolBar,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 
 NOMBRE_APLICACION = "Ne-notoka HelioRegla"
-
-
-def ruta_base_aplicacion():
-    """Devuelve la raíz de recursos en desarrollo o en PyInstaller."""
-    if getattr(sys, "frozen", False):
-        return Path(
-            getattr(
-                sys,
-                "_MEIPASS",
-                Path(sys.executable).resolve().parent,
-            )
-        )
-    return Path(__file__).resolve().parent.parent
-
-
-RUTA_PROYECTO = ruta_base_aplicacion()
+RUTA_PROYECTO = Path(__file__).resolve().parent.parent
 RUTA_LOGO = RUTA_PROYECTO / "assets" / "logo_ne_notoka.png"
 RUTA_ICONO = RUTA_PROYECTO / "assets" / "icono_ne_notoka.ico"
-VERSION = "1.0.0"
+VERSION = "0.14.1"
 
 
 class VisorSolar(QGraphicsView):
@@ -112,7 +65,6 @@ class VisorSolar(QGraphicsView):
     quitar_punto_filamento = Signal(float, float)
     finalizar_filamento = Signal()
     cancelar_filamento = Signal()
-    region_mancha = Signal(float, float, float, float)
 
     def __init__(self):
         super().__init__()
@@ -132,9 +84,6 @@ class VisorSolar(QGraphicsView):
         self.callback_parcial = None
         self.modo_medicion_protuberancia = False
         self.modo_medicion_filamento = False
-        self.modo_etiquetado_mancha = False
-        self.inicio_region_mancha = None
-        self.previsualizacion_region_mancha = None
 
         self.setAcceptDrops(True)
         self.setObjectName("visorSolar")
@@ -150,15 +99,13 @@ class VisorSolar(QGraphicsView):
         if pixmap.isNull():
             QMessageBox.warning(
                 self,
-                tr("open_failed"),
-                tr("incompatible_image"),
+                "No se pudo abrir",
+                "El archivo seleccionado no contiene una imagen compatible.",
             )
             return False
 
         self.escena.clear()
         self.circulo_limbo = None
-        self.inicio_region_mancha = None
-        self.previsualizacion_region_mancha = None
         self.elemento_imagen = QGraphicsPixmapItem(pixmap)
         self.escena.addItem(self.elemento_imagen)
         self.escena.setSceneRect(self.elemento_imagen.boundingRect())
@@ -173,8 +120,8 @@ class VisorSolar(QGraphicsView):
         if self.elemento_imagen is None:
             QMessageBox.information(
                 self,
-                tr("first_open_image"),
-                tr("need_image_limb"),
+                "Primero abre una imagen",
+                "Necesitas cargar una fotografía solar antes de ajustar el limbo.",
             )
             return
 
@@ -203,8 +150,8 @@ class VisorSolar(QGraphicsView):
         if self.elemento_imagen is None:
             QMessageBox.information(
                 self,
-                tr("first_open_image"),
-                tr("need_limb_photo"),
+                "Primero abre una imagen",
+                "Necesitas cargar una fotografía del limbo solar.",
             )
             return False
 
@@ -319,8 +266,9 @@ class VisorSolar(QGraphicsView):
         if resultado is None:
             QMessageBox.information(
                 self,
-                tr("missing_points"),
-                tr("three_points"),
+                "Faltan puntos",
+                "Marca al menos tres puntos bien separados "
+                "sobre el limbo.",
             )
             return None
 
@@ -361,35 +309,6 @@ class VisorSolar(QGraphicsView):
         self.unsetCursor()
 
     def mousePressEvent(self, event):
-        if self.modo_etiquetado_mancha:
-            if event.button() == Qt.LeftButton:
-                self.inicio_region_mancha = self.mapToScene(
-                    event.position().toPoint()
-                )
-                self.previsualizacion_region_mancha = (
-                    QGraphicsEllipseItem()
-                )
-                lapiz = QPen(QColor("#00A6C8"), 2)
-                lapiz.setCosmetic(True)
-                lapiz.setStyle(Qt.DashLine)
-                self.previsualizacion_region_mancha.setPen(
-                    lapiz
-                )
-                self.previsualizacion_region_mancha.setBrush(
-                    QBrush(Qt.NoBrush)
-                )
-                self.previsualizacion_region_mancha.setZValue(70)
-                self.escena.addItem(
-                    self.previsualizacion_region_mancha
-                )
-                event.accept()
-                return
-
-            if event.button() == Qt.RightButton:
-                self.cancelar_region_mancha()
-                event.accept()
-                return
-
         if self.modo_medicion_filamento:
             if event.button() == Qt.LeftButton:
                 elemento = self.itemAt(
@@ -454,100 +373,7 @@ class VisorSolar(QGraphicsView):
 
         super().mousePressEvent(event)
 
-    def mouseMoveEvent(self, event):
-        if (
-            self.modo_etiquetado_mancha
-            and self.inicio_region_mancha is not None
-            and self.previsualizacion_region_mancha is not None
-        ):
-            actual = self.mapToScene(event.position().toPoint())
-            rectangulo = QRectF(
-                self.inicio_region_mancha,
-                actual,
-            ).normalized()
-            self.previsualizacion_region_mancha.setRect(
-                rectangulo
-            )
-            event.accept()
-            return
-
-        super().mouseMoveEvent(event)
-
-    def mouseReleaseEvent(self, event):
-        if (
-            self.modo_etiquetado_mancha
-            and event.button() == Qt.LeftButton
-            and self.inicio_region_mancha is not None
-        ):
-            final = self.mapToScene(event.position().toPoint())
-            rectangulo = QRectF(
-                self.inicio_region_mancha,
-                final,
-            ).normalized()
-
-            if rectangulo.width() < 8:
-                rectangulo.setLeft(
-                    self.inicio_region_mancha.x() - 18
-                )
-                rectangulo.setRight(
-                    self.inicio_region_mancha.x() + 18
-                )
-            if rectangulo.height() < 8:
-                rectangulo.setTop(
-                    self.inicio_region_mancha.y() - 18
-                )
-                rectangulo.setBottom(
-                    self.inicio_region_mancha.y() + 18
-                )
-
-            rectangulo = rectangulo.intersected(
-                self.elemento_imagen.boundingRect()
-            )
-            if rectangulo.isEmpty():
-                self.cancelar_region_mancha()
-                event.accept()
-                return
-
-            centro = rectangulo.center()
-            self.limpiar_previsualizacion_region_mancha()
-            self.region_mancha.emit(
-                centro.x(),
-                centro.y(),
-                rectangulo.width(),
-                rectangulo.height(),
-            )
-            event.accept()
-            return
-
-        super().mouseReleaseEvent(event)
-
-    def limpiar_previsualizacion_region_mancha(self):
-        if self.previsualizacion_region_mancha is not None:
-            if (
-                self.previsualizacion_region_mancha.scene()
-                is not None
-            ):
-                self.escena.removeItem(
-                    self.previsualizacion_region_mancha
-                )
-            self.previsualizacion_region_mancha = None
-        self.inicio_region_mancha = None
-
-    def cancelar_region_mancha(self):
-        self.limpiar_previsualizacion_region_mancha()
-        self.modo_etiquetado_mancha = False
-        self.setDragMode(QGraphicsView.ScrollHandDrag)
-        self.unsetCursor()
-
     def keyPressEvent(self, event):
-        if (
-            self.modo_etiquetado_mancha
-            and event.key() == Qt.Key_Escape
-        ):
-            self.cancelar_region_mancha()
-            event.accept()
-            return
-
         if self.modo_medicion_filamento:
             if event.key() in (Qt.Key_Return, Qt.Key_Enter):
                 self.finalizar_filamento.emit()
@@ -614,8 +440,8 @@ class VisorSolar(QGraphicsView):
         if Path(ruta).suffix.lower() not in extensiones:
             QMessageBox.information(
                 self,
-                tr("unsupported_format"),
-                tr("supported_formats"),
+                "Formato no compatible",
+                "Por ahora puedes abrir PNG, JPEG, BMP y TIFF.",
             )
             return
 
@@ -636,12 +462,6 @@ class VentanaPrincipal(QMainWindow):
             "Ne-notoka Cofame",
             "Ne-notoka HelioRegla",
         )
-        self.idioma = self.ajustes.value(
-            "interfaz/idioma",
-            "es",
-            type=str,
-        )
-        establecer_idioma(self.idioma)
 
         self.color_limbo = self.ajustes.value(
             "contorno/color",
@@ -653,7 +473,7 @@ class VentanaPrincipal(QMainWindow):
             3,
             type=int,
         )
-        self.modo_ajuste = tr("manual_limb")
+        self.modo_ajuste = "Ajuste manual del limbo"
         self.error_limbo_px = None
         self.incertidumbre_radio_px = None
         self.puntos_limbo = None
@@ -663,18 +483,6 @@ class VentanaPrincipal(QMainWindow):
         self.regla_solar = None
         self.ruta_proyecto_actual = None
         self.comparacion_tierra_luna = None
-        self.comparaciones_planetas = {}
-        self.rutas_imagenes_planetas = {
-            planeta: (
-                self.ajustes.value(
-                    f"comparaciones/imagen_{planeta}",
-                    "",
-                    type=str,
-                )
-                or None
-            )
-            for planeta in PLANETAS
-        }
         self.ruta_imagen_tierra = self.ajustes.value(
             "comparaciones/imagen_tierra",
             "",
@@ -685,21 +493,6 @@ class VentanaPrincipal(QMainWindow):
             "",
             type=str,
         ) or None
-        self.color_distancia_tierra_luna = self.ajustes.value(
-            "comparaciones/color_distancia",
-            "#FFB81C",
-            type=str,
-        )
-        self.mostrar_linea_distancia = self.ajustes.value(
-            "comparaciones/mostrar_linea_distancia",
-            True,
-            type=bool,
-        )
-        self.color_informacion_planetas = self.ajustes.value(
-            "comparaciones/color_informacion_planetas",
-            "#FFFFFF",
-            type=str,
-        )
 
         self.intervalo_regla = self.ajustes.value(
             "regla/intervalo_km",
@@ -737,36 +530,6 @@ class VentanaPrincipal(QMainWindow):
             28,
             type=int,
         )
-        self.rotacion_catalogo = self.ajustes.value(
-            "catalogo/rotacion",
-            0.0,
-            type=float,
-        )
-        self.espejo_horizontal_catalogo = self.ajustes.value(
-            "catalogo/espejo_horizontal",
-            False,
-            type=bool,
-        )
-        self.espejo_vertical_catalogo = self.ajustes.value(
-            "catalogo/espejo_vertical",
-            False,
-            type=bool,
-        )
-        self.mostrar_conteo_manchas = self.ajustes.value(
-            "catalogo/mostrar_conteo",
-            True,
-            type=bool,
-        )
-        self.fuente_referencia_catalogo = self.ajustes.value(
-            "catalogo/fuente_referencia",
-            "automatica",
-            type=str,
-        )
-        self.ultimas_regiones_catalogo = []
-        self.instante_catalogo = None
-        self.ruta_referencia_catalogo = None
-        self.nombre_fuente_referencia_catalogo = ""
-        self.detalle_alineacion_catalogo = ""
 
         self.visor = VisorSolar()
         self.visor.imagen_cargada.connect(
@@ -787,12 +550,8 @@ class VentanaPrincipal(QMainWindow):
         self.visor.cancelar_filamento.connect(
             self.cancelar_medicion_filamento
         )
-        self.visor.region_mancha.connect(
-            self.crear_region_mancha_manual
-        )
         self.mediciones_protuberancias = []
         self.mediciones_filamentos = []
-        self.etiquetas_manchas = []
         self.filamento_en_curso = None
         self.historial_estados = []
         self.restaurando_historial = False
@@ -800,7 +559,6 @@ class VentanaPrincipal(QMainWindow):
 
         self.crear_interfaz()
         self.crear_barra_herramientas()
-        self.aplicar_idioma()
         self.crear_estado()
         self.aplicar_estilo()
 
@@ -854,11 +612,11 @@ class VentanaPrincipal(QMainWindow):
         cabecera_marca.addWidget(logo_marca)
         cabecera_marca.addLayout(textos_marca, 1)
 
-        self.descripcion_interfaz = QLabel(
+        descripcion = QLabel(
             "Medición, comparación y etiquetado de imágenes solares."
         )
-        self.descripcion_interfaz.setWordWrap(True)
-        self.descripcion_interfaz.setObjectName("descripcion")
+        descripcion.setWordWrap(True)
+        descripcion.setObjectName("descripcion")
 
         self.boton_abrir = QPushButton("Abrir imagen solar")
         self.boton_abrir.setObjectName("botonPrincipal")
@@ -931,35 +689,6 @@ class VentanaPrincipal(QMainWindow):
         self.boton_filamento.clicked.connect(
             self.iniciar_medicion_filamento
         )
-
-        self.boton_mancha = QPushButton(
-            "Marcar región activa manualmente"
-        )
-        self.boton_mancha.setObjectName("botonHerramienta")
-        self.boton_mancha.clicked.connect(
-            self.iniciar_etiquetado_mancha
-        )
-
-        self.boton_detectar_manchas = QPushButton(
-            "Consultar regiones NOAA/HEK"
-        )
-        self.boton_detectar_manchas.setObjectName(
-            "botonHerramienta"
-        )
-        self.boton_detectar_manchas.clicked.connect(
-            self.consultar_catalogos_regiones
-        )
-
-        self.boton_referencia_solar = QPushButton(
-            "Ver referencia solar anotada"
-        )
-        self.boton_referencia_solar.setObjectName(
-            "botonContextual"
-        )
-        self.boton_referencia_solar.clicked.connect(
-            self.mostrar_referencia_solar
-        )
-        self.boton_referencia_solar.setVisible(False)
 
         self.boton_aceptar_filamento = QPushButton(
             "Aceptar medición"
@@ -1150,31 +879,46 @@ class VentanaPrincipal(QMainWindow):
         self.etiqueta_archivo.setWordWrap(True)
         self.etiqueta_archivo.setObjectName("informacion")
 
-        self.etiqueta_ayuda = QLabel(
+        separador = QFrame()
+        separador.setFrameShape(QFrame.HLine)
+        separador.setObjectName("separador")
+
+        proximamente = QLabel(
+            "Próximas herramientas\n\n"
+            "• Ajuste del limbo\n"
+            "• Regla solar\n"
+            "• Medición de estructuras\n"
+            "• Comparación planetaria\n"
+            "• Etiquetado de regiones"
+        )
+        
+        proximamente.setObjectName("proximamente")
+        proximamente.setWordWrap(True)
+
+        ayuda = QLabel(
             "Rueda: zoom\n"
             "Arrastrar: desplazar\n"
             "También puedes soltar una imagen."
         )
-        self.etiqueta_ayuda.setObjectName("ayuda")
+        ayuda.setObjectName("ayuda")
 
-        self.seccion_calibracion = QLabel("CALIBRACIÓN")
-        self.seccion_calibracion.setObjectName("seccionPanel")
+        seccion_calibracion = QLabel("CALIBRACIÓN")
+        seccion_calibracion.setObjectName("seccionPanel")
 
-        self.seccion_mediciones = QLabel("MEDICIONES")
-        self.seccion_mediciones.setObjectName("seccionPanel")
+        seccion_mediciones = QLabel("MEDICIONES")
+        seccion_mediciones.setObjectName("seccionPanel")
 
-        self.seccion_visualizacion = QLabel("VISUALIZACIÓN")
-        self.seccion_visualizacion.setObjectName("seccionPanel")
+        seccion_visualizacion = QLabel("VISUALIZACIÓN")
+        seccion_visualizacion.setObjectName("seccionPanel")
 
         panel_layout.addLayout(cabecera_marca)
-        panel_layout.addWidget(self.descripcion_interfaz)
+        panel_layout.addWidget(descripcion)
         panel_layout.addSpacing(8)
         panel_layout.addWidget(self.boton_abrir)
         panel_layout.addWidget(self.boton_exportar)
         panel_layout.addWidget(self.boton_abrir_proyecto)
         panel_layout.addWidget(self.boton_guardar_proyecto)
-        panel_layout.addWidget(self.seccion_calibracion)
-        panel_layout.addWidget(self.boton_calibracion)
+        panel_layout.addWidget(seccion_calibracion)
         panel_layout.addWidget(self.boton_limbo)
         panel_layout.addWidget(self.boton_autodetectar)
         panel_layout.addWidget(self.boton_parcial)
@@ -1188,7 +932,8 @@ class VentanaPrincipal(QMainWindow):
             0,
             Qt.AlignHCenter,
         )
-        panel_layout.addWidget(self.seccion_mediciones)
+        panel_layout.addWidget(self.boton_calibracion)
+        panel_layout.addWidget(seccion_mediciones)
         panel_layout.addWidget(self.boton_protuberancia)
         panel_layout.addWidget(self.boton_filamento)
         panel_layout.addWidget(
@@ -1196,15 +941,8 @@ class VentanaPrincipal(QMainWindow):
             0,
             Qt.AlignHCenter,
         )
-        panel_layout.addWidget(self.boton_detectar_manchas)
-        panel_layout.addWidget(
-            self.boton_referencia_solar,
-            0,
-            Qt.AlignHCenter,
-        )
-        panel_layout.addWidget(self.boton_mancha)
         panel_layout.addWidget(self.boton_borrar_mediciones)
-        panel_layout.addWidget(self.seccion_visualizacion)
+        panel_layout.addWidget(seccion_visualizacion)
         panel_layout.addWidget(self.boton_regla)
 
         fila_regla_1 = QHBoxLayout()
@@ -1238,17 +976,19 @@ class VentanaPrincipal(QMainWindow):
 
         panel_layout.addWidget(self.etiqueta_archivo)
         panel_layout.addWidget(self.etiqueta_medicion)
+        panel_layout.addWidget(separador)
+        panel_layout.addWidget(proximamente)
         panel_layout.addStretch()
-        panel_layout.addWidget(self.etiqueta_ayuda)
+        panel_layout.addWidget(ayuda)
 
         zona_visor = QWidget()
         zona_layout = QVBoxLayout(zona_visor)
         zona_layout.setContentsMargins(18, 18, 18, 18)
 
-        self.encabezado_area = QLabel("Área de trabajo solar")
-        self.encabezado_area.setObjectName("encabezado")
+        encabezado = QLabel("Área de trabajo solar")
+        encabezado.setObjectName("encabezado")
 
-        zona_layout.addWidget(self.encabezado_area)
+        zona_layout.addWidget(encabezado)
         zona_layout.addWidget(self.visor, 1)
 
         scroll_panel = QScrollArea()
@@ -1265,78 +1005,67 @@ class VentanaPrincipal(QMainWindow):
 
         self.setCentralWidget(contenedor)
 
-    def createPopupMenu(self):
-        return None
-
     def crear_barra_herramientas(self):
         barra = QToolBar("Herramientas principales")
         barra.setMovable(False)
-        barra.setContextMenuPolicy(Qt.PreventContextMenu)
         self.addToolBar(barra)
 
-        self.accion_abrir = QAction("Abrir", self)
-        self.accion_abrir.setShortcut(QKeySequence.Open)
-        self.accion_abrir.triggered.connect(self.abrir_imagen)
+        accion_abrir = QAction("Abrir", self)
+        accion_abrir.setShortcut(QKeySequence.Open)
+        accion_abrir.triggered.connect(self.abrir_imagen)
 
-        self.accion_ajustar = QAction(
-            "Ajustar a ventana",
-            self,
-        )
-        self.accion_ajustar.setShortcut("F")
-        self.accion_ajustar.triggered.connect(
-            self.visor.ajustar_ventana
-        )
+        accion_ajustar = QAction("Ajustar a ventana", self)
+        accion_ajustar.setShortcut("F")
+        accion_ajustar.triggered.connect(self.visor.ajustar_ventana)
 
-        self.accion_real = QAction("Tamaño real", self)
-        self.accion_real.setShortcut("1")
-        self.accion_real.triggered.connect(
-            self.visor.tamano_real
-        )
+        accion_real = QAction("Tamaño real", self)
+        accion_real.setShortcut("1")
+        accion_real.triggered.connect(self.visor.tamano_real)
 
-        barra.addAction(self.accion_abrir)
+        barra.addAction(accion_abrir)
 
-        self.accion_exportar = QAction("Exportar", self)
-        self.accion_exportar.setShortcut("Ctrl+Shift+S")
-        self.accion_exportar.triggered.connect(
+        accion_exportar = QAction("Exportar", self)
+        accion_exportar.setShortcut("Ctrl+Shift+S")
+        accion_exportar.triggered.connect(
             self.exportar_imagen_anotada
         )
-        barra.addAction(self.accion_exportar)
+        barra.addAction(accion_exportar)
 
-        self.accion_guardar_proyecto = QAction(
+        accion_guardar_proyecto = QAction(
             "Guardar proyecto",
             self,
         )
-        self.accion_guardar_proyecto.setShortcut(
-            QKeySequence.Save
-        )
-        self.accion_guardar_proyecto.triggered.connect(
+        accion_guardar_proyecto.setShortcut(QKeySequence.Save)
+        accion_guardar_proyecto.triggered.connect(
             self.guardar_proyecto
         )
-        barra.addAction(self.accion_guardar_proyecto)
+        barra.addAction(accion_guardar_proyecto)
 
-        self.accion_abrir_proyecto = QAction(
+        accion_abrir_proyecto = QAction(
             "Abrir proyecto",
             self,
         )
-        self.accion_abrir_proyecto.setShortcut("Ctrl+Alt+O")
-        self.accion_abrir_proyecto.triggered.connect(
+        accion_abrir_proyecto.setShortcut("Ctrl+Alt+O")
+        accion_abrir_proyecto.triggered.connect(
             self.abrir_proyecto
         )
-        barra.addAction(self.accion_abrir_proyecto)
+        barra.addAction(accion_abrir_proyecto)
 
         barra.addSeparator()
-        barra.addAction(self.accion_ajustar)
-        barra.addAction(self.accion_real)
+        barra.addAction(accion_ajustar)
+        barra.addAction(accion_real)
         barra.addSeparator()
 
-        self.accion_deshacer = QAction("Deshacer", self)
-        self.accion_deshacer.setShortcut(QKeySequence.Undo)
-        self.accion_deshacer.triggered.connect(
+        accion_deshacer = QAction("Deshacer", self)
+        accion_deshacer.setShortcut(QKeySequence.Undo)
+        accion_deshacer.triggered.connect(
             self.deshacer_ultimo_cambio
         )
-        self.addAction(self.accion_deshacer)
+        barra.addAction(accion_deshacer)
 
-        self.menu_comparaciones = QMenu(self)
+        menu_comparaciones = self.menuBar().addMenu(
+            "Comparaciones"
+        )
         self.accion_anadir_tierra_luna = QAction(
             "Añadir Tierra–Luna",
             self,
@@ -1344,24 +1073,9 @@ class VentanaPrincipal(QMainWindow):
         self.accion_anadir_tierra_luna.triggered.connect(
             self.anadir_comparacion_tierra_luna
         )
-        self.menu_comparaciones.addAction(
+        menu_comparaciones.addAction(
             self.accion_anadir_tierra_luna
         )
-
-        self.menu_anadir_planeta = QMenu(
-            "Añadir planeta",
-            self,
-        )
-        self.acciones_anadir_planeta = {}
-
-        for planeta in PLANETAS:
-            accion = QAction(planeta.title(), self)
-            accion.triggered.connect(
-                lambda comprobado=False, clave=planeta:
-                self.anadir_comparacion_planeta(clave)
-            )
-            self.menu_anadir_planeta.addAction(accion)
-            self.acciones_anadir_planeta[planeta] = accion
 
         self.opcion_distancia_tierra_luna = QAction(
             "Mostrar distancia real (384,400 km)",
@@ -1371,116 +1085,40 @@ class VentanaPrincipal(QMainWindow):
         self.opcion_distancia_tierra_luna.toggled.connect(
             self.cambiar_distancia_tierra_luna
         )
-        self.menu_comparaciones.addAction(
+        menu_comparaciones.addAction(
             self.opcion_distancia_tierra_luna
         )
+        menu_comparaciones.addSeparator()
 
-        self.opcion_linea_distancia = QAction(
-            "Mostrar línea y distancia",
-            self,
-        )
-        self.opcion_linea_distancia.setCheckable(True)
-        self.opcion_linea_distancia.setChecked(
-            self.mostrar_linea_distancia
-        )
-        self.opcion_linea_distancia.toggled.connect(
-            self.cambiar_linea_distancia_tierra_luna
-        )
-        self.menu_comparaciones.addAction(
-            self.opcion_linea_distancia
-        )
-
-        self.accion_color_distancia = QAction(
-            "Color de la distancia…",
-            self,
-        )
-        self.accion_color_distancia.triggered.connect(
-            self.seleccionar_color_distancia_tierra_luna
-        )
-        self.menu_comparaciones.addAction(
-            self.accion_color_distancia
-        )
-        self.menu_comparaciones.addSeparator()
-        self.menu_comparaciones.addMenu(
-            self.menu_anadir_planeta
-        )
-
-        self.accion_color_informacion_planetas = QAction(
-            "Color de información planetaria…",
-            self,
-        )
-        self.accion_color_informacion_planetas.triggered.connect(
-            self.seleccionar_color_informacion_planetas
-        )
-        self.menu_comparaciones.addAction(
-            self.accion_color_informacion_planetas
-        )
-
-        self.accion_imagen_tierra = QAction(
+        accion_imagen_tierra = QAction(
             "Usar imagen personalizada de la Tierra…",
             self,
         )
-        self.accion_imagen_tierra.triggered.connect(
+        accion_imagen_tierra.triggered.connect(
             self.seleccionar_imagen_tierra
         )
-        self.menu_imagenes_comparacion = QMenu(
-            "Imágenes personalizadas",
-            self,
-        )
-        self.menu_imagenes_comparacion.addAction(
-            self.accion_imagen_tierra
-        )
+        menu_comparaciones.addAction(accion_imagen_tierra)
 
-        self.accion_imagen_luna = QAction(
+        accion_imagen_luna = QAction(
             "Usar imagen personalizada de la Luna…",
             self,
         )
-        self.accion_imagen_luna.triggered.connect(
+        accion_imagen_luna.triggered.connect(
             self.seleccionar_imagen_luna
         )
-        self.menu_imagenes_comparacion.addAction(
-            self.accion_imagen_luna
-        )
-        self.menu_imagenes_comparacion.addSeparator()
+        menu_comparaciones.addAction(accion_imagen_luna)
 
-        self.acciones_imagen_planeta = {}
-
-        for planeta in PLANETAS:
-            accion = QAction(planeta.title(), self)
-            accion.triggered.connect(
-                lambda comprobado=False, clave=planeta:
-                self.seleccionar_imagen_planeta(clave)
-            )
-            self.menu_imagenes_comparacion.addAction(accion)
-            self.acciones_imagen_planeta[planeta] = accion
-
-        self.menu_imagenes_comparacion.addSeparator()
-
-        self.accion_restaurar_imagenes = QAction(
-            "Restaurar Tierra–Luna",
+        accion_restaurar_imagenes = QAction(
+            "Restaurar dibujos predeterminados",
             self,
         )
-        self.accion_restaurar_imagenes.triggered.connect(
+        accion_restaurar_imagenes.triggered.connect(
             self.restaurar_imagenes_tierra_luna
         )
-        self.menu_imagenes_comparacion.addAction(
-            self.accion_restaurar_imagenes
+        menu_comparaciones.addAction(
+            accion_restaurar_imagenes
         )
-
-        self.accion_restaurar_planetas = QAction(
-            "Restaurar todos los planetas",
-            self,
-        )
-        self.accion_restaurar_planetas.triggered.connect(
-            self.restaurar_imagenes_planetas
-        )
-        self.menu_imagenes_comparacion.addAction(
-            self.accion_restaurar_planetas
-        )
-        self.menu_comparaciones.addMenu(
-            self.menu_imagenes_comparacion
-        )
-        self.menu_comparaciones.addSeparator()
+        menu_comparaciones.addSeparator()
 
         self.accion_quitar_tierra_luna = QAction(
             "Quitar comparación",
@@ -1490,368 +1128,14 @@ class VentanaPrincipal(QMainWindow):
         self.accion_quitar_tierra_luna.triggered.connect(
             self.quitar_comparacion_tierra_luna
         )
-        self.menu_comparaciones.addAction(
+        menu_comparaciones.addAction(
             self.accion_quitar_tierra_luna
         )
 
-        self.accion_quitar_planetas = QAction(
-            "Quitar todos los planetas",
-            self,
-        )
-        self.accion_quitar_planetas.setEnabled(False)
-        self.accion_quitar_planetas.triggered.connect(
-            self.quitar_comparaciones_planetas
-        )
-        self.menu_comparaciones.addAction(
-            self.accion_quitar_planetas
-        )
-
-        self.boton_menu_comparaciones = QToolButton()
-        self.boton_menu_comparaciones.setToolButtonStyle(
-            Qt.ToolButtonTextBesideIcon
-        )
-        self.boton_menu_comparaciones.setPopupMode(
-            QToolButton.InstantPopup
-        )
-        self.boton_menu_comparaciones.setMenu(
-            self.menu_comparaciones
-        )
-        barra.addWidget(self.boton_menu_comparaciones)
-
-        self.menu_idioma = QMenu(self)
-        grupo_idiomas = QActionGroup(self)
-        grupo_idiomas.setExclusive(True)
-        self.accion_espanol = QAction("Español", self)
-        self.accion_espanol.setCheckable(True)
-        self.accion_english = QAction("English", self)
-        self.accion_english.setCheckable(True)
-        grupo_idiomas.addAction(self.accion_espanol)
-        grupo_idiomas.addAction(self.accion_english)
-        self.menu_idioma.addActions(grupo_idiomas.actions())
-        self.accion_espanol.setChecked(self.idioma == "es")
-        self.accion_english.setChecked(self.idioma == "en")
-        self.accion_espanol.triggered.connect(
-            lambda: self.cambiar_idioma("es")
-        )
-        self.accion_english.triggered.connect(
-            lambda: self.cambiar_idioma("en")
-        )
-
-        self.boton_menu_idioma = QToolButton()
-        self.boton_menu_idioma.setToolButtonStyle(
-            Qt.ToolButtonTextBesideIcon
-        )
-        self.boton_menu_idioma.setPopupMode(
-            QToolButton.InstantPopup
-        )
-        self.boton_menu_idioma.setMenu(self.menu_idioma)
-        barra.addWidget(self.boton_menu_idioma)
-
-        self.menu_ayuda = QMenu(self)
-        self.accion_acerca_de = QAction(self)
-        self.accion_acerca_de.triggered.connect(
-            lambda comprobado=False:
-            self.mostrar_acerca_de(0)
-        )
-        self.accion_licencia = QAction(self)
-        self.accion_licencia.triggered.connect(
-            lambda comprobado=False:
-            self.mostrar_acerca_de(1)
-        )
-        self.accion_apoyar = QAction(self)
-        self.accion_apoyar.triggered.connect(
-            lambda comprobado=False:
-            self.mostrar_acerca_de(2)
-        )
-        self.menu_ayuda.addAction(self.accion_acerca_de)
-        self.menu_ayuda.addAction(self.accion_licencia)
-        self.menu_ayuda.addSeparator()
-        self.menu_ayuda.addAction(self.accion_apoyar)
-
-        self.boton_menu_ayuda = QToolButton()
-        self.boton_menu_ayuda.setToolButtonStyle(
-            Qt.ToolButtonTextBesideIcon
-        )
-        self.boton_menu_ayuda.setPopupMode(
-            QToolButton.InstantPopup
-        )
-        self.boton_menu_ayuda.setMenu(self.menu_ayuda)
-        barra.addWidget(self.boton_menu_ayuda)
-
-    def cambiar_idioma(self, idioma):
-        if idioma == self.idioma:
-            return
-
-        modos = {
-            "Ajuste manual del limbo": "manual_limb",
-            "Manual limb adjustment": "manual_limb",
-            "Limbo parcial ajustado por puntos": (
-                "partial_limb_mode"
-            ),
-            "Partial limb fitted from points": (
-                "partial_limb_mode"
-            ),
-            "Limbo detectado automáticamente": (
-                "automatic_limb"
-            ),
-            "Limb detected automatically": "automatic_limb",
-        }
-        clave_modo = modos.get(self.modo_ajuste)
-        self.idioma = idioma
-        self.ajustes.setValue("interfaz/idioma", idioma)
-        establecer_idioma(idioma)
-
-        if clave_modo is not None:
-            self.modo_ajuste = tr(clave_modo)
-
-        self.aplicar_idioma()
-
-        if self.visor.circulo_limbo is not None:
-            circulo = self.visor.circulo_limbo
-            self.actualizar_medicion_limbo(
-                circulo.pos().x(),
-                circulo.pos().y(),
-                circulo.radio,
-            )
-        else:
-            for medicion in self.mediciones_filamentos:
-                medicion.recalcular()
-
-        if self.filamento_en_curso is not None:
-            self.filamento_en_curso.recalcular()
-
-        if self.comparacion_tierra_luna is not None:
-            self.comparacion_tierra_luna.actualizar()
-
-        for comparacion in self.comparaciones_planetas.values():
-            comparacion.actualizar()
-
-        for etiqueta in self.etiquetas_manchas:
-            datos = etiqueta.datos_catalogo
-            numero = datos.get("numero")
-            if not numero:
-                continue
-            lineas = [f"AR {numero}"]
-            clase_magnetica = datos.get("clase_magnetica")
-            if clase_magnetica:
-                lineas.append(
-                    tr(
-                        "magnetic_class_short",
-                        value=clase_magnetica,
-                    )
-                )
-            manchas = datos.get("manchas")
-            if (
-                self.mostrar_conteo_manchas
-                and manchas is not None
-            ):
-                lineas.append(
-                    tr(
-                        (
-                            "one_sunspot"
-                            if int(manchas) == 1
-                            else "many_sunspots"
-                        ),
-                        count=manchas,
-                    )
-                )
-            etiqueta.establecer_nombre("\n".join(lineas))
-
-        acomodar_etiquetas(self.etiquetas_manchas)
-        self.statusBar().showMessage(tr("language_changed"))
-
-    def aplicar_idioma(self):
-        self.descripcion_interfaz.setText(tr("description"))
-        self.boton_abrir.setText(tr("open_image"))
-        self.boton_exportar.setText(tr("export_image"))
-        self.boton_abrir_proyecto.setText(tr("open_project"))
-        self.boton_guardar_proyecto.setText(
-            tr("save_project")
-        )
-        self.boton_limbo.setText(tr("adjust_limb"))
-        self.boton_autodetectar.setText(
-            tr("autodetect_limb")
-        )
-        self.boton_parcial.setText(tr("partial_limb"))
-        self.boton_calibracion.setText(
-            tr("equipment_calibration")
-        )
-        self.boton_protuberancia.setText(
-            tr("measure_prominence")
-        )
-        self.boton_filamento.setText(tr("measure_filament"))
-        self.boton_detectar_manchas.setText(
-            tr("detect_sunspots")
-        )
-        self.boton_referencia_solar.setText(
-            tr("view_solar_reference")
-        )
-        self.boton_mancha.setText(tr("label_sunspot"))
-        self.boton_aceptar_filamento.setText(
-            tr("accept_measurement")
-        )
-        self.boton_borrar_mediciones.setText(
-            tr("delete_measurements")
-        )
-        self.boton_regla.setText(
-            tr(
-                "hide_ruler"
-                if self.regla_solar is not None
-                else "show_ruler"
-            )
-        )
-        self.boton_color_regla.setText(tr("ruler_color"))
-        self.boton_color_anotaciones.setText(
-            tr("annotation_color")
-        )
-        self.boton_color_limbo.setText(tr("outline_color"))
-        self.boton_finalizar_parcial.setText(
-            tr("finish_partial")
-        )
-        self.boton_cancelar_parcial.setText(
-            tr("cancel_points")
-        )
-        self.seccion_calibracion.setText(tr("calibration"))
-        self.seccion_mediciones.setText(tr("measurements"))
-        self.seccion_visualizacion.setText(
-            tr("visualization")
-        )
-        self.etiqueta_ayuda.setText(tr("help"))
-        self.encabezado_area.setText(tr("solar_workspace"))
-
-        if self.visor.ruta_imagen is None:
-            self.etiqueta_archivo.setText(tr("no_image"))
-            self.etiqueta_medicion.setText(
-                tr("pending_calibration")
-            )
-
-        self.accion_abrir.setText(tr("open"))
-        self.accion_exportar.setText(tr("export"))
-        self.accion_guardar_proyecto.setText(
-            tr("save_project")
-        )
-        self.accion_abrir_proyecto.setText(
-            tr("open_project")
-        )
-        self.accion_ajustar.setText(tr("fit_window"))
-        self.accion_real.setText(tr("actual_size"))
-        self.accion_deshacer.setText(tr("undo"))
-        self.boton_menu_comparaciones.setText(
-            tr("comparisons")
-        )
-        self.accion_anadir_tierra_luna.setText(
-            tr("add_earth_moon")
-        )
-        self.menu_anadir_planeta.setTitle(tr("add_planet"))
-
-        for planeta, accion in (
-            self.acciones_anadir_planeta.items()
-        ):
-            accion.setText(tr(planeta))
-
-        self.opcion_distancia_tierra_luna.setText(
-            tr("real_earth_moon_distance")
-        )
-        self.opcion_linea_distancia.setText(
-            tr("show_distance_line")
-        )
-        self.accion_color_distancia.setText(
-            tr("distance_color")
-        )
-        self.accion_color_informacion_planetas.setText(
-            tr("planet_info_color")
-        )
-        self.accion_imagen_tierra.setText(
-            tr("custom_earth")
-        )
-        self.accion_imagen_luna.setText(tr("custom_moon"))
-        self.menu_imagenes_comparacion.setTitle(
-            tr("custom_images")
-        )
-
-        for planeta, accion in (
-            self.acciones_imagen_planeta.items()
-        ):
-            accion.setText(
-                tr(
-                    "custom_planet",
-                    name=tr(planeta),
-                )
-            )
-
-        self.accion_restaurar_imagenes.setText(
-            tr("restore_earth_moon")
-        )
-        self.accion_restaurar_planetas.setText(
-            tr("restore_all_planets")
-        )
-        self.accion_quitar_tierra_luna.setText(
-            tr("remove_comparison")
-        )
-        self.accion_quitar_planetas.setText(
-            tr("remove_all_planets")
-        )
-        self.boton_menu_idioma.setText(tr("language"))
-        self.accion_espanol.setText(tr("spanish"))
-        self.accion_english.setText(tr("english"))
-        self.boton_menu_ayuda.setText(tr("help_menu"))
-        self.accion_acerca_de.setText(tr("about_app"))
-        self.accion_licencia.setText(tr("license_action"))
-        self.accion_apoyar.setText(tr("support_project"))
-
-        for indice in range(
-            self.selector_intervalo_regla.count()
-        ):
-            valor = self.selector_intervalo_regla.itemData(
-                indice
-            )
-            self.selector_intervalo_regla.setItemText(
-                indice,
-                tr("every_km", value=valor // 1000),
-            )
-
-        for indice in range(self.selector_maximo_regla.count()):
-            valor = self.selector_maximo_regla.itemData(indice)
-            self.selector_maximo_regla.setItemText(
-                indice,
-                tr("up_to_km", value=valor // 1000),
-            )
-
-        for indice in range(
-            self.selector_grosor_regla.count()
-        ):
-            valor = self.selector_grosor_regla.itemData(indice)
-            self.selector_grosor_regla.setItemText(
-                indice,
-                tr("line_px", value=valor),
-            )
-
-        for selector in (
-            self.selector_tamano_regla,
-            self.selector_tamano_anotaciones,
-        ):
-            for indice in range(selector.count()):
-                selector.setItemText(
-                    indice,
-                    tr(
-                        "text_px",
-                        value=selector.itemData(indice),
-                    ),
-                )
-
     def crear_estado(self):
         estado = QStatusBar()
-        estado.showMessage(tr("ready"))
+        estado.showMessage("Listo para abrir una imagen solar")
         self.setStatusBar(estado)
-
-    def mostrar_acerca_de(self, pestana=0):
-        DialogoAcercaDe(
-            VERSION,
-            RUTA_LOGO,
-            RUTA_PROYECTO / "LICENSE",
-            pestana=pestana,
-            parent=self,
-        ).exec()
 
     def abrir_imagen(self):
         ultima_carpeta = self.ajustes.value(
@@ -1862,9 +1146,10 @@ class VentanaPrincipal(QMainWindow):
 
         ruta, _ = QFileDialog.getOpenFileName(
             self,
-            tr("open_image_title"),
+            "Abrir imagen solar",
             ultima_carpeta,
-            tr("image_filter"),
+            "Imágenes (*.png *.jpg *.jpeg *.bmp *.tif *.tiff);;"
+            "Todos los archivos (*)",
         )
 
         if ruta:
@@ -1874,8 +1159,9 @@ class VentanaPrincipal(QMainWindow):
         if self.visor.elemento_imagen is None:
             QMessageBox.information(
                 self,
-                tr("first_open_image"),
-                tr("need_image_export"),
+                "Primero abre una imagen",
+                "Necesitas cargar una fotografía antes de "
+                "exportar el resultado.",
             )
             return
 
@@ -1894,7 +1180,7 @@ class VentanaPrincipal(QMainWindow):
 
         ruta, filtro = QFileDialog.getSaveFileName(
             self,
-            tr("export_title"),
+            "Exportar imagen anotada",
             ruta_sugerida,
             "PNG (*.png);;JPEG (*.jpg *.jpeg);;"
             "TIFF (*.tif *.tiff)",
@@ -1981,8 +1267,9 @@ class VentanaPrincipal(QMainWindow):
         if not imagen.save(str(destino), quality=calidad):
             QMessageBox.warning(
                 self,
-                tr("export_failed"),
-                tr("export_failed_text"),
+                "No fue posible exportar",
+                "El formato seleccionado no pudo guardarse. "
+                "Prueba con PNG.",
             )
             return
 
@@ -1991,17 +1278,14 @@ class VentanaPrincipal(QMainWindow):
             str(destino.parent),
         )
         self.statusBar().showMessage(
-            tr("image_exported", name=destino.name)
+            f"Imagen exportada: {destino.name}"
         )
         QMessageBox.information(
             self,
-            tr("export_done"),
-            tr(
-                "export_success",
-                width=imagen.width(),
-                height=imagen.height(),
-                path=destino,
-            ),
+            "Exportación terminada",
+            "La imagen anotada se guardó con su resolución "
+            f"original:\n{imagen.width()} × "
+            f"{imagen.height()} píxeles\n\n{destino}",
         )
 
     def datos_del_proyecto(self, ruta_proyecto):
@@ -2047,41 +1331,11 @@ class VentanaPrincipal(QMainWindow):
                 for medicion in self.mediciones_filamentos
                 if not medicion.eliminada
             ],
-            "manchas": [
-                etiqueta.estado()
-                for etiqueta in self.etiquetas_manchas
-                if not etiqueta.eliminada
-            ],
-            "catalogo_regiones": {
-                "rotacion": self.rotacion_catalogo,
-                "espejo_horizontal": (
-                    self.espejo_horizontal_catalogo
-                ),
-                "espejo_vertical": (
-                    self.espejo_vertical_catalogo
-                ),
-                "mostrar_conteo": self.mostrar_conteo_manchas,
-                "fuente_alineacion": (
-                    self.fuente_referencia_catalogo
-                ),
-                "instante_utc": (
-                    self.instante_catalogo.isoformat()
-                    if self.instante_catalogo is not None
-                    else None
-                ),
-            },
             "comparacion_tierra_luna": (
                 self.comparacion_tierra_luna.estado()
                 if self.comparacion_tierra_luna is not None
                 else None
             ),
-            "comparaciones_planetas": [
-                comparacion.estado()
-                for comparacion in (
-                    self.comparaciones_planetas.values()
-                )
-                if not comparacion.eliminada
-            ],
             "estilo": {
                 "color_limbo": self.color_limbo,
                 "grosor_limbo": self.grosor_limbo,
@@ -2102,8 +1356,9 @@ class VentanaPrincipal(QMainWindow):
         if self.visor.ruta_imagen is None:
             QMessageBox.information(
                 self,
-                tr("first_open_image"),
-                tr("need_image_project"),
+                "Primero abre una imagen",
+                "Necesitas una fotografía antes de guardar "
+                "un proyecto.",
             )
             return
 
@@ -2113,8 +1368,9 @@ class VentanaPrincipal(QMainWindow):
         ):
             QMessageBox.information(
                 self,
-                tr("finish_editing"),
-                tr("finish_editing_text"),
+                "Finaliza la edición actual",
+                "Antes de guardar, acepta o cancela el "
+                "filamento o ajuste parcial en curso.",
             )
             return
 
@@ -2132,9 +1388,9 @@ class VentanaPrincipal(QMainWindow):
             )
             seleccionada, _ = QFileDialog.getSaveFileName(
                 self,
-                tr("save_project_title"),
+                "Guardar proyecto HelioRegla",
                 sugerida,
-                tr("project_filter"),
+                "Proyecto HelioRegla (*.helio)",
             )
 
             if not seleccionada:
@@ -2153,7 +1409,7 @@ class VentanaPrincipal(QMainWindow):
         except OSError as error:
             QMessageBox.warning(
                 self,
-                tr("save_failed"),
+                "No fue posible guardar",
                 str(error),
             )
             return
@@ -2164,10 +1420,8 @@ class VentanaPrincipal(QMainWindow):
             str(self.ruta_proyecto_actual.parent),
         )
         self.statusBar().showMessage(
-            tr(
-                "project_saved",
-                name=self.ruta_proyecto_actual.name,
-            )
+            f"Proyecto guardado: "
+            f"{self.ruta_proyecto_actual.name}"
         )
 
     def abrir_proyecto(self):
@@ -2178,9 +1432,9 @@ class VentanaPrincipal(QMainWindow):
         )
         seleccionada, _ = QFileDialog.getOpenFileName(
             self,
-            tr("open_project_title"),
+            "Abrir proyecto HelioRegla",
             ultima_carpeta,
-            tr("project_filter"),
+            "Proyecto HelioRegla (*.helio)",
         )
 
         if not seleccionada:
@@ -2193,7 +1447,7 @@ class VentanaPrincipal(QMainWindow):
         except ErrorProyecto as error:
             QMessageBox.warning(
                 self,
-                tr("invalid_project"),
+                "Proyecto no válido",
                 str(error),
             )
             return
@@ -2206,9 +1460,10 @@ class VentanaPrincipal(QMainWindow):
         if ruta_imagen is None:
             encontrada, _ = QFileDialog.getOpenFileName(
                 self,
-                tr("locate_project_image"),
+                "Localizar fotografía del proyecto",
                 str(ruta_proyecto.parent),
-                tr("image_filter"),
+                "Imágenes (*.png *.jpg *.jpeg *.bmp "
+                "*.tif *.tiff)",
             )
 
             if not encontrada:
@@ -2252,64 +1507,12 @@ class VentanaPrincipal(QMainWindow):
                 "descripcion"
             )
 
-            catalogo = datos.get("catalogo_regiones", {})
-            self.rotacion_catalogo = float(
-                catalogo.get(
-                    "rotacion",
-                    self.rotacion_catalogo,
-                )
-            )
-            self.espejo_horizontal_catalogo = bool(
-                catalogo.get(
-                    "espejo_horizontal",
-                    self.espejo_horizontal_catalogo,
-                )
-            )
-            self.espejo_vertical_catalogo = bool(
-                catalogo.get(
-                    "espejo_vertical",
-                    self.espejo_vertical_catalogo,
-                )
-            )
-            self.mostrar_conteo_manchas = bool(
-                catalogo.get(
-                    "mostrar_conteo",
-                    self.mostrar_conteo_manchas,
-                )
-            )
-            self.fuente_referencia_catalogo = catalogo.get(
-                "fuente_alineacion",
-                self.fuente_referencia_catalogo,
-            )
-
             datos_limbo = datos.get("limbo")
 
             if datos_limbo:
-                modo_guardado = datos_limbo.get(
+                self.modo_ajuste = datos_limbo.get(
                     "modo",
-                    tr("manual_limb"),
-                )
-                modos_guardados = {
-                    "Ajuste manual del limbo": "manual_limb",
-                    "Manual limb adjustment": "manual_limb",
-                    "Limbo parcial ajustado por puntos": (
-                        "partial_limb_mode"
-                    ),
-                    "Partial limb fitted from points": (
-                        "partial_limb_mode"
-                    ),
-                    "Limbo detectado automáticamente": (
-                        "automatic_limb"
-                    ),
-                    "Limb detected automatically": (
-                        "automatic_limb"
-                    ),
-                }
-                self.modo_ajuste = tr(
-                    modos_guardados.get(
-                        modo_guardado,
-                        "manual_limb",
-                    )
+                    "Ajuste recuperado del proyecto",
                 )
                 self.error_limbo_px = datos_limbo.get(
                     "error_limbo_px"
@@ -2370,29 +1573,6 @@ class VentanaPrincipal(QMainWindow):
                         medicion
                     )
 
-            for datos_mancha in datos.get("manchas", []):
-                self.crear_etiqueta_mancha(
-                    datos_mancha["x"],
-                    datos_mancha["y"],
-                    nombre=datos_mancha.get(
-                        "nombre",
-                        tr(
-                            "sunspot_default",
-                            number=(
-                                len(self.etiquetas_manchas) + 1
-                            ),
-                        ),
-                    ),
-                    preguntar=False,
-                    registrar=False,
-                    radio=datos_mancha.get("radio", 18),
-                    ancho=datos_mancha.get("ancho"),
-                    alto=datos_mancha.get("alto"),
-                    datos_catalogo=datos_mancha.get(
-                        "catalogo"
-                    ),
-                )
-
             datos_comparacion = datos.get(
                 "comparacion_tierra_luna"
             )
@@ -2404,29 +1584,6 @@ class VentanaPrincipal(QMainWindow):
                         False,
                     )
                 )
-                color_distancia = datos_comparacion.get(
-                    "color_distancia",
-                    self.color_distancia_tierra_luna,
-                )
-                mostrar_linea_distancia = bool(
-                    datos_comparacion.get(
-                        "mostrar_linea_distancia",
-                        self.mostrar_linea_distancia,
-                    )
-                )
-                color_informacion = datos_comparacion.get(
-                    "color_informacion",
-                    self.color_informacion_planetas,
-                )
-                self.color_distancia_tierra_luna = (
-                    color_distancia
-                )
-                self.mostrar_linea_distancia = (
-                    mostrar_linea_distancia
-                )
-                self.color_informacion_planetas = (
-                    color_informacion
-                )
                 self.opcion_distancia_tierra_luna.blockSignals(
                     True
                 )
@@ -2436,11 +1593,6 @@ class VentanaPrincipal(QMainWindow):
                 self.opcion_distancia_tierra_luna.blockSignals(
                     False
                 )
-                self.opcion_linea_distancia.blockSignals(True)
-                self.opcion_linea_distancia.setChecked(
-                    mostrar_linea_distancia
-                )
-                self.opcion_linea_distancia.blockSignals(False)
                 self.comparacion_tierra_luna = (
                     ComparacionTierraLuna(
                         self.visor.escena,
@@ -2463,11 +1615,6 @@ class VentanaPrincipal(QMainWindow):
                                 self.ruta_imagen_luna,
                             )
                         ),
-                        color_distancia=color_distancia,
-                        mostrar_linea_distancia=(
-                            mostrar_linea_distancia
-                        ),
-                        color_informacion=color_informacion,
                         al_eliminar=(
                             self.eliminar_comparacion_tierra_luna
                         ),
@@ -2475,20 +1622,6 @@ class VentanaPrincipal(QMainWindow):
                     )
                 )
                 self.accion_quitar_tierra_luna.setEnabled(True)
-
-            if escala is not None:
-                for datos_planeta in datos.get(
-                    "comparaciones_planetas",
-                    [],
-                ):
-                    self._crear_planeta_desde_estado(
-                        datos_planeta,
-                        escala,
-                    )
-
-            self.accion_quitar_planetas.setEnabled(
-                bool(self.comparaciones_planetas)
-            )
 
             datos_regla = datos.get("regla", {})
             self.intervalo_regla = int(
@@ -2536,9 +1669,9 @@ class VentanaPrincipal(QMainWindow):
                 )
             elif self.escala_equipo_km is not None:
                 self.etiqueta_medicion.setText(
-                    f"{tr('recovered_calibration')}\n"
+                    "Calibración recuperada del proyecto\n"
                     f"{self.descripcion_calibracion or ''}\n"
-                    f"{tr('active_physical_scale')}: "
+                    f"Escala física activa: "
                     f"{self.escala_equipo_km:,.2f} km/px"
                 )
 
@@ -2549,7 +1682,7 @@ class VentanaPrincipal(QMainWindow):
                 str(ruta_proyecto.parent),
             )
             self.statusBar().showMessage(
-                tr("project_opened", name=ruta_proyecto.name)
+                f"Proyecto abierto: {ruta_proyecto.name}"
             )
         finally:
             self.suspendiendo_historial = False
@@ -2585,50 +1718,25 @@ class VentanaPrincipal(QMainWindow):
             f"border: 2px solid {self.color_regla};"
         )
 
-    def anadir_comparacion_tierra_luna(
-        self,
-        separacion_real=False,
-    ):
+    def anadir_comparacion_tierra_luna(self):
         escala = self._escala_activa()
 
         if escala is None or self.visor.elemento_imagen is None:
             QMessageBox.information(
                 self,
-                tr("first_calibrate"),
-                tr("comparison_needs_scale"),
+                "Primero calibra la imagen",
+                "Ajusta el limbo o introduce los datos del "
+                "equipo antes de añadir una comparación.",
             )
             return
 
         if self.comparacion_tierra_luna is not None:
-            if (
-                not separacion_real
-                and self.comparacion_tierra_luna.separacion_real
-            ):
-                self.registrar_estado()
-                self.opcion_distancia_tierra_luna.blockSignals(
-                    True
-                )
-                self.opcion_distancia_tierra_luna.setChecked(
-                    False
-                )
-                self.opcion_distancia_tierra_luna.blockSignals(
-                    False
-                )
-                self.comparacion_tierra_luna\
-                    .establecer_separacion_real(False)
-                return
-
             self.statusBar().showMessage(
-                tr("comparison_exists")
+                "La comparación Tierra–Luna ya está visible"
             )
             return
 
         self.registrar_estado()
-        self.opcion_distancia_tierra_luna.blockSignals(True)
-        self.opcion_distancia_tierra_luna.setChecked(
-            bool(separacion_real)
-        )
-        self.opcion_distancia_tierra_luna.blockSignals(False)
         rectangulo = (
             self.visor.elemento_imagen.boundingRect()
         )
@@ -2638,19 +1746,10 @@ class VentanaPrincipal(QMainWindow):
                 self.visor.escena,
                 escala,
                 posicion,
-                bool(separacion_real),
+                self.opcion_distancia_tierra_luna.isChecked(),
                 self.tamano_anotaciones,
                 imagen_tierra=self.ruta_imagen_tierra,
                 imagen_luna=self.ruta_imagen_luna,
-                color_distancia=(
-                    self.color_distancia_tierra_luna
-                ),
-                mostrar_linea_distancia=(
-                    self.mostrar_linea_distancia
-                ),
-                color_informacion=(
-                    self.color_informacion_planetas
-                ),
                 al_eliminar=(
                     self.eliminar_comparacion_tierra_luna
                 ),
@@ -2659,58 +1758,18 @@ class VentanaPrincipal(QMainWindow):
         )
         self.accion_quitar_tierra_luna.setEnabled(True)
         self.statusBar().showMessage(
-            tr("comparison_added")
+            "Comparación Tierra–Luna añadida; arrástrala "
+            "para colocarla"
         )
 
     def cambiar_distancia_tierra_luna(self, activa):
         if self.comparacion_tierra_luna is None:
-            if activa:
-                self.anadir_comparacion_tierra_luna(True)
             return
 
         self.registrar_estado()
         self.comparacion_tierra_luna.establecer_separacion_real(
             activa
         )
-
-    def cambiar_linea_distancia_tierra_luna(self, visible):
-        self.mostrar_linea_distancia = bool(visible)
-        self.ajustes.setValue(
-            "comparaciones/mostrar_linea_distancia",
-            self.mostrar_linea_distancia,
-        )
-
-        if self.comparacion_tierra_luna is None:
-            return
-
-        self.registrar_estado()
-        self.comparacion_tierra_luna\
-            .establecer_linea_distancia_visible(visible)
-
-    def seleccionar_color_distancia_tierra_luna(self):
-        color = QColorDialog.getColor(
-            QColor(self.color_distancia_tierra_luna),
-            self,
-            tr("select_distance_color"),
-        )
-
-        if not color.isValid():
-            return
-
-        if self.comparacion_tierra_luna is not None:
-            self.registrar_estado()
-
-        self.color_distancia_tierra_luna = color.name()
-        self.ajustes.setValue(
-            "comparaciones/color_distancia",
-            self.color_distancia_tierra_luna,
-        )
-
-        if self.comparacion_tierra_luna is not None:
-            self.comparacion_tierra_luna\
-                .establecer_color_distancia(
-                    self.color_distancia_tierra_luna
-                )
 
     def quitar_comparacion_tierra_luna(self):
         if self.comparacion_tierra_luna is not None:
@@ -2721,216 +1780,9 @@ class VentanaPrincipal(QMainWindow):
             self.comparacion_tierra_luna = None
 
         self.accion_quitar_tierra_luna.setEnabled(False)
-        self.opcion_distancia_tierra_luna.blockSignals(True)
-        self.opcion_distancia_tierra_luna.setChecked(False)
-        self.opcion_distancia_tierra_luna.blockSignals(False)
         self.statusBar().showMessage(
-            tr("comparison_removed")
+            "Comparación Tierra–Luna eliminada"
         )
-
-    def seleccionar_color_informacion_planetas(self):
-        color = QColorDialog.getColor(
-            QColor(self.color_informacion_planetas),
-            self,
-            tr("select_planet_info_color"),
-        )
-
-        if not color.isValid():
-            return
-
-        if (
-            self.comparacion_tierra_luna is not None
-            or self.comparaciones_planetas
-        ):
-            self.registrar_estado()
-
-        self.color_informacion_planetas = color.name()
-        self.ajustes.setValue(
-            "comparaciones/color_informacion_planetas",
-            self.color_informacion_planetas,
-        )
-
-        if self.comparacion_tierra_luna is not None:
-            self.comparacion_tierra_luna\
-                .establecer_color_informacion(
-                    self.color_informacion_planetas
-                )
-
-        for comparacion in self.comparaciones_planetas.values():
-            comparacion.establecer_color_informacion(
-                self.color_informacion_planetas
-            )
-
-    def anadir_comparacion_planeta(self, planeta):
-        escala = self._escala_activa()
-
-        if escala is None or self.visor.elemento_imagen is None:
-            QMessageBox.information(
-                self,
-                tr("first_calibrate"),
-                tr("comparison_needs_scale"),
-            )
-            return
-
-        if planeta in self.comparaciones_planetas:
-            self.statusBar().showMessage(
-                tr("planet_exists", name=tr(planeta))
-            )
-            return
-
-        self.registrar_estado()
-        rectangulo = self.visor.elemento_imagen.boundingRect()
-        separacion = 35 * len(self.comparaciones_planetas)
-        posicion = rectangulo.center() + QPointF(
-            separacion,
-            separacion,
-        )
-        comparacion = ComparacionPlaneta(
-            self.visor.escena,
-            planeta,
-            escala,
-            posicion,
-            self.tamano_anotaciones,
-            imagen=self.rutas_imagenes_planetas.get(planeta),
-            color_informacion=(
-                self.color_informacion_planetas
-            ),
-            al_eliminar=self.eliminar_comparacion_planeta,
-            antes_cambiar=self.registrar_estado,
-        )
-        self.comparaciones_planetas[planeta] = comparacion
-        self.accion_quitar_planetas.setEnabled(True)
-        self.statusBar().showMessage(
-            tr("planet_added", name=tr(planeta))
-        )
-
-    def eliminar_comparacion_planeta(self, comparacion):
-        planeta = comparacion.planeta
-
-        if self.comparaciones_planetas.get(planeta) is comparacion:
-            del self.comparaciones_planetas[planeta]
-
-        self.accion_quitar_planetas.setEnabled(
-            bool(self.comparaciones_planetas)
-        )
-        self.statusBar().showMessage(
-            tr("planet_removed", name=tr(planeta))
-        )
-
-    def quitar_comparaciones_planetas(self):
-        if not self.comparaciones_planetas:
-            return
-
-        self.registrar_estado()
-
-        for comparacion in list(
-            self.comparaciones_planetas.values()
-        ):
-            comparacion.antes_cambiar = None
-            comparacion.eliminar()
-
-        self.comparaciones_planetas.clear()
-        self.accion_quitar_planetas.setEnabled(False)
-
-    def seleccionar_imagen_planeta(self, planeta):
-        ruta_actual = self.rutas_imagenes_planetas.get(planeta)
-        carpeta = (
-            str(Path(ruta_actual).parent)
-            if ruta_actual
-            else self.ajustes.value(
-                "comparaciones/ultima_carpeta",
-                "",
-                type=str,
-            )
-        )
-        ruta, _ = QFileDialog.getOpenFileName(
-            self,
-            tr(
-                "select_planet_image",
-                name=tr(planeta),
-            ),
-            carpeta,
-            tr("image_filter"),
-        )
-
-        if not ruta:
-            return
-
-        if planeta in self.comparaciones_planetas:
-            self.registrar_estado()
-
-        self.rutas_imagenes_planetas[planeta] = ruta
-        self.ajustes.setValue(
-            f"comparaciones/imagen_{planeta}",
-            ruta,
-        )
-        self.ajustes.setValue(
-            "comparaciones/ultima_carpeta",
-            str(Path(ruta).parent),
-        )
-
-        if planeta in self.comparaciones_planetas:
-            self.comparaciones_planetas[
-                planeta
-            ].establecer_imagen(ruta)
-
-        self.statusBar().showMessage(
-            tr(
-                "planet_custom_applied",
-                name=tr(planeta),
-            )
-        )
-
-    def restaurar_imagenes_planetas(self):
-        if not any(self.rutas_imagenes_planetas.values()):
-            return
-
-        if self.comparaciones_planetas:
-            self.registrar_estado()
-
-        for planeta in PLANETAS:
-            self.rutas_imagenes_planetas[planeta] = None
-            self.ajustes.remove(
-                f"comparaciones/imagen_{planeta}"
-            )
-
-            if planeta in self.comparaciones_planetas:
-                self.comparaciones_planetas[
-                    planeta
-                ].establecer_imagen()
-
-        self.statusBar().showMessage(
-            tr("planet_defaults_restored")
-        )
-
-    def _crear_planeta_desde_estado(self, datos, escala):
-        planeta = datos.get("planeta")
-
-        if planeta not in PLANETAS:
-            return
-
-        imagen = datos.get(
-            "imagen",
-            self.rutas_imagenes_planetas.get(planeta),
-        )
-        color_informacion = datos.get(
-            "color_informacion",
-            self.color_informacion_planetas,
-        )
-        self.color_informacion_planetas = color_informacion
-        self.rutas_imagenes_planetas[planeta] = imagen
-        comparacion = ComparacionPlaneta(
-            self.visor.escena,
-            planeta,
-            escala,
-            QPointF(datos["x"], datos["y"]),
-            self.tamano_anotaciones,
-            imagen=imagen,
-            color_informacion=color_informacion,
-            al_eliminar=self.eliminar_comparacion_planeta,
-            antes_cambiar=self.registrar_estado,
-        )
-        self.comparaciones_planetas[planeta] = comparacion
 
     def _seleccionar_imagen_comparacion(self, cuerpo):
         clave = (
@@ -2954,14 +1806,10 @@ class VentanaPrincipal(QMainWindow):
         )
         ruta, _ = QFileDialog.getOpenFileName(
             self,
-            tr(
-                "select_body_image",
-                body=tr(
-                    "earth" if cuerpo == "Tierra" else "moon"
-                ),
-            ),
+            f"Seleccionar imagen de la {cuerpo}",
             carpeta,
-            tr("image_filter"),
+            "Imágenes (*.png *.jpg *.jpeg *.bmp "
+            "*.tif *.tiff);;Todos los archivos (*)",
         )
 
         if not ruta:
@@ -2990,12 +1838,7 @@ class VentanaPrincipal(QMainWindow):
             )
 
         self.statusBar().showMessage(
-            tr(
-                "custom_applied",
-                body=tr(
-                    "earth" if cuerpo == "Tierra" else "moon"
-                ),
-            )
+            f"Imagen personalizada de la {cuerpo} aplicada"
         )
 
     def seleccionar_imagen_tierra(self):
@@ -3021,7 +1864,8 @@ class VentanaPrincipal(QMainWindow):
             self.comparacion_tierra_luna.establecer_imagenes()
 
         self.statusBar().showMessage(
-            tr("defaults_restored")
+            "Dibujos predeterminados de Tierra y Luna "
+            "restaurados"
         )
 
     def actualizar_comparacion_tierra_luna(self):
@@ -3035,18 +1879,12 @@ class VentanaPrincipal(QMainWindow):
                 escala
             )
 
-        if escala is not None:
-            for comparacion in (
-                self.comparaciones_planetas.values()
-            ):
-                comparacion.establecer_escala(escala)
-
     def alternar_regla_solar(self):
         if self.regla_solar is not None:
             self.regla_solar.eliminar()
             self.regla_solar = None
-            self.boton_regla.setText(tr("show_ruler"))
-            self.statusBar().showMessage(tr("ruler_hidden"))
+            self.boton_regla.setText("Mostrar regla solar")
+            self.statusBar().showMessage("Regla solar oculta")
             return
 
         circulo = self.visor.circulo_limbo
@@ -3054,8 +1892,9 @@ class VentanaPrincipal(QMainWindow):
         if circulo is None:
             QMessageBox.information(
                 self,
-                tr("first_adjust_limb"),
-                tr("ruler_needs_limb"),
+                "Primero ajusta el limbo",
+                "La regla solar necesita un círculo de "
+                "referencia antes de mostrarse.",
             )
             return
 
@@ -3067,15 +1906,15 @@ class VentanaPrincipal(QMainWindow):
             self.grosor_regla,
             self.tamano_regla,
         )
-        self.boton_regla.setText(tr("hide_ruler"))
+        self.boton_regla.setText("Ocultar regla solar")
         self.actualizar_regla_solar()
-        self.statusBar().showMessage(tr("ruler_visible"))
+        self.statusBar().showMessage("Regla solar visible")
 
     def seleccionar_color_regla(self):
         color = QColorDialog.getColor(
             self.color_regla,
             self,
-            tr("select_ruler_color"),
+            "Seleccionar color de la regla solar",
         )
 
         if not color.isValid():
@@ -3160,7 +1999,7 @@ class VentanaPrincipal(QMainWindow):
         color = QColorDialog.getColor(
             self.color_anotaciones,
             self,
-            tr("select_annotation_color"),
+            "Seleccionar color de anotaciones",
         )
 
         if not color.isValid():
@@ -3215,608 +2054,16 @@ class VentanaPrincipal(QMainWindow):
                 self.tamano_anotaciones
             )
 
-        for comparacion in self.comparaciones_planetas.values():
-            comparacion.establecer_tamano_texto(
-                self.tamano_anotaciones
-            )
-
-        for etiqueta in self.etiquetas_manchas:
-            etiqueta.establecer_estilo(
-                self.color_anotaciones,
-                self.tamano_anotaciones,
-            )
-        acomodar_etiquetas(self.etiquetas_manchas)
-
-    def _nombre_region_catalogo(self, region):
-        lineas = [region.nombre]
-        if region.clase_magnetica:
-            lineas.append(
-                tr(
-                    "magnetic_class_short",
-                    value=region.clase_magnetica,
-                )
-            )
-        if (
-            self.mostrar_conteo_manchas
-            and region.manchas is not None
-        ):
-            clave = (
-                "one_sunspot"
-                if region.manchas == 1
-                else "many_sunspots"
-            )
-            lineas.append(
-                tr(clave, count=region.manchas)
-            )
-        return "\n".join(lineas)
-
-    @staticmethod
-    def _datos_region_catalogo(region):
-        return {
-            "numero": region.numero,
-            "ubicacion": region.ubicacion,
-            "manchas": region.manchas,
-            "area": region.area,
-            "clasificacion": region.clasificacion,
-            "clase_magnetica": region.clase_magnetica,
-            "fuentes": region.fuentes,
-        }
-
-    def consultar_catalogos_regiones(self):
-        if self.visor.elemento_imagen is None:
-            QMessageBox.information(
-                self,
-                tr("first_open_image"),
-                tr("sunspot_needs_image"),
-            )
-            return
-
-        if self.visor.modo_medicion_filamento:
-            self.cancelar_medicion_filamento()
-
-        self._terminar_modo_mancha()
-        self.visor.modo_medicion_protuberancia = False
-
-        instante, fuente_fecha = leer_fecha_hora_imagen(
-            self.visor.ruta_imagen
-        )
-        dialogo = DialogoConsultaRegiones(
-            instante,
-            fuente_fecha,
-            rotacion=self.rotacion_catalogo,
-            espejo_horizontal=(
-                self.espejo_horizontal_catalogo
-            ),
-            espejo_vertical=self.espejo_vertical_catalogo,
-            mostrar_manchas=self.mostrar_conteo_manchas,
-            fuente_referencia=self.fuente_referencia_catalogo,
-            puede_alinear=(
-                self.visor.circulo_limbo is not None
-            ),
-            parent=self,
-        )
-
-        if dialogo.exec() != QDialog.Accepted:
-            return
-
-        instante = dialogo.instante_utc()
-        self.instante_catalogo = instante
-        self.rotacion_catalogo = dialogo.rotacion.value()
-        self.espejo_horizontal_catalogo = (
-            dialogo.espejo_horizontal.isChecked()
-        )
-        self.espejo_vertical_catalogo = (
-            dialogo.espejo_vertical.isChecked()
-        )
-        self.mostrar_conteo_manchas = (
-            dialogo.mostrar_manchas.isChecked()
-        )
-        alinear_automaticamente = (
-            dialogo.alinear_automaticamente.isChecked()
-        )
-        self.fuente_referencia_catalogo = (
-            dialogo.fuente_referencia.currentData()
-        )
-        self.ajustes.setValue(
-            "catalogo/rotacion",
-            self.rotacion_catalogo,
-        )
-        self.ajustes.setValue(
-            "catalogo/espejo_horizontal",
-            self.espejo_horizontal_catalogo,
-        )
-        self.ajustes.setValue(
-            "catalogo/espejo_vertical",
-            self.espejo_vertical_catalogo,
-        )
-        self.ajustes.setValue(
-            "catalogo/mostrar_conteo",
-            self.mostrar_conteo_manchas,
-        )
-        self.ajustes.setValue(
-            "catalogo/fuente_referencia",
-            self.fuente_referencia_catalogo,
-        )
-
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        self.statusBar().showMessage(
-            tr("querying_catalogs")
-        )
-
-        try:
-            regiones, errores = consultar_regiones(instante)
-        except ErrorCatalogoRegiones as error:
-            QMessageBox.warning(
-                self,
-                tr("catalog_error_title"),
-                tr(
-                    "catalog_error_text",
-                    details=str(error),
-                ),
-            )
-            self.statusBar().showMessage(
-                tr("catalog_query_failed")
-            )
-            return
-        finally:
-            QApplication.restoreOverrideCursor()
-
-        if not regiones:
-            QMessageBox.information(
-                self,
-                tr("catalog_results_title"),
-                tr("catalog_no_regions"),
-            )
-            self.statusBar().showMessage(
-                tr("catalog_no_regions")
-            )
-            return
-
-        self.ultimas_regiones_catalogo = regiones
-        errores_referencia = []
-        detalle_alineacion = ""
-
-        QApplication.setOverrideCursor(Qt.WaitCursor)
-        self.statusBar().showMessage(
-            tr("downloading_solar_references")
-        )
-        try:
-            referencias, errores_referencia = (
-                descargar_referencias(
-                    instante,
-                    self.fuente_referencia_catalogo,
-                )
-            )
-            circulo = self.visor.circulo_limbo
-            resultado_registro = None
-
-            if (
-                alinear_automaticamente
-                and circulo is not None
-                and self.visor.ruta_imagen is not None
-            ):
-                resultado_registro = registrar_orientacion(
-                    self.visor.ruta_imagen,
-                    circulo.pos().x(),
-                    circulo.pos().y(),
-                    circulo.radio,
-                    referencias,
-                )
-                confianza = tr(
-                    "alignment_confidence_"
-                    f"{resultado_registro.confianza}"
-                )
-                if resultado_registro.confianza == "alta":
-                    self.rotacion_catalogo = (
-                        resultado_registro.rotacion
-                    )
-                    self.espejo_horizontal_catalogo = (
-                        resultado_registro.espejo_horizontal
-                    )
-                    self.espejo_vertical_catalogo = (
-                        resultado_registro.espejo_vertical
-                    )
-                    detalle_alineacion = tr(
-                        "automatic_alignment_applied",
-                        source=(
-                            resultado_registro.referencia.fuente.nombre
-                        ),
-                        rotation=self.rotacion_catalogo,
-                        confidence=confianza,
-                    )
-                else:
-                    detalle_alineacion = tr(
-                        "automatic_alignment_low",
-                        source=(
-                            resultado_registro.referencia.fuente.nombre
-                        ),
-                        confidence=confianza,
-                    )
-
-            referencia_elegida = (
-                resultado_registro.referencia
-                if resultado_registro is not None
-                else referencias[0]
-            )
-            refinadas = refinar_posiciones_regiones(
-                referencia_elegida,
-                regiones,
-                instante,
-            )
-            self.ruta_referencia_catalogo = (
-                crear_referencia_anotada(
-                    referencia_elegida,
-                    regiones,
-                    instante,
-                    mostrar_conteo=self.mostrar_conteo_manchas,
-                )
-            )
-            self.nombre_fuente_referencia_catalogo = (
-                referencia_elegida.fuente.nombre
-            )
-            if detalle_alineacion:
-                detalle_alineacion += " "
-            detalle_alineacion += tr(
-                "catalog_local_refinement",
-                refined=refinadas,
-                total=len(regiones),
-            )
-            self.detalle_alineacion_catalogo = (
-                detalle_alineacion
-            )
-            self.boton_referencia_solar.setVisible(True)
-        except ErrorReferenciaSolar as error:
-            errores_referencia.append(str(error))
-            detalle_alineacion = tr(
-                "automatic_alignment_unavailable"
-            )
-        except (OSError, ValueError) as error:
-            errores_referencia.append(str(error))
-            detalle_alineacion = tr(
-                "automatic_alignment_unavailable"
-            )
-        finally:
-            QApplication.restoreOverrideCursor()
-
-        self.ajustes.setValue(
-            "catalogo/rotacion",
-            self.rotacion_catalogo,
-        )
-        self.ajustes.setValue(
-            "catalogo/espejo_horizontal",
-            self.espejo_horizontal_catalogo,
-        )
-        self.ajustes.setValue(
-            "catalogo/espejo_vertical",
-            self.espejo_vertical_catalogo,
-        )
-
-        resultados = DialogoResultadosRegiones(
-            regiones,
-            errores=errores + errores_referencia,
-            detalle_alineacion=detalle_alineacion,
-            parent=self,
-        )
-
-        if resultados.exec() != QDialog.Accepted:
-            return
-
-        seleccionadas = resultados.seleccionadas()
-        if not seleccionadas:
-            return
-
-        circulo = self.visor.circulo_limbo
-        if circulo is None:
-            QMessageBox.information(
-                self,
-                tr("catalog_loaded_title"),
-                tr("catalog_loaded_manual_text"),
-            )
-            self.statusBar().showMessage(
-                tr(
-                    "catalog_loaded",
-                    count=len(regiones),
-                )
-            )
-            return
-
-        self.registrar_estado()
-        self.suspendiendo_historial = True
-        agregadas = 0
-        fuera = 0
-        rectangulo_imagen = (
-            self.visor.elemento_imagen.boundingRect()
-        )
-
-        try:
-            for region in seleccionadas:
-                posicion = posicion_en_imagen(
-                    region,
-                    instante,
-                    circulo.pos().x(),
-                    circulo.pos().y(),
-                    circulo.radio,
-                    rotacion=self.rotacion_catalogo,
-                    espejo_horizontal=(
-                        self.espejo_horizontal_catalogo
-                    ),
-                    espejo_vertical=(
-                        self.espejo_vertical_catalogo
-                    ),
-                )
-                if posicion is None:
-                    fuera += 1
-                    continue
-
-                x, y = posicion
-                if not rectangulo_imagen.contains(QPointF(x, y)):
-                    fuera += 1
-                    continue
-
-                ancho, alto = tamano_region_en_imagen(
-                    region,
-                    circulo.radio,
-                )
-                existente = next(
-                    (
-                        etiqueta
-                        for etiqueta in self.etiquetas_manchas
-                        if str(
-                            etiqueta.datos_catalogo.get(
-                                "numero",
-                                "",
-                            )
-                        )
-                        == str(region.numero)
-                    ),
-                    None,
-                )
-                if existente is not None:
-                    existente.ancho = ancho
-                    existente.alto = alto
-                    existente.datos_catalogo = (
-                        self._datos_region_catalogo(region)
-                    )
-                    existente.establecer_nombre(
-                        self._nombre_region_catalogo(region)
-                    )
-                    existente.grupo.setPos(QPointF(x, y))
-                    existente.actualizar()
-                    agregadas += 1
-                    continue
-
-                self.crear_etiqueta_mancha(
-                    x,
-                    y,
-                    nombre=self._nombre_region_catalogo(region),
-                    preguntar=False,
-                    registrar=False,
-                    ancho=ancho,
-                    alto=alto,
-                    datos_catalogo=(
-                        self._datos_region_catalogo(region)
-                    ),
-                )
-                agregadas += 1
-        finally:
-            self.suspendiendo_historial = False
-
-        acomodar_etiquetas(self.etiquetas_manchas)
-
-        self.statusBar().showMessage(
-            tr(
-                "catalog_regions_added",
-                count=agregadas,
-                skipped=fuera,
-            )
-        )
-
-    def mostrar_referencia_solar(self):
-        if (
-            self.ruta_referencia_catalogo is None
-            or not Path(self.ruta_referencia_catalogo).exists()
-        ):
-            QMessageBox.information(
-                self,
-                tr("solar_reference_title"),
-                tr("solar_reference_unavailable"),
-            )
-            return
-
-        DialogoReferenciaSolar(
-            self.ruta_referencia_catalogo,
-            self.nombre_fuente_referencia_catalogo,
-            self.detalle_alineacion_catalogo,
-            parent=self,
-        ).exec()
-
-    def iniciar_etiquetado_mancha(self):
-        if self.visor.elemento_imagen is None:
-            QMessageBox.information(
-                self,
-                tr("first_open_image"),
-                tr("sunspot_needs_image"),
-            )
-            return
-
-        if self.visor.modo_medicion_filamento:
-            self.cancelar_medicion_filamento()
-
-        self.visor.modo_medicion_protuberancia = False
-        self.visor.modo_etiquetado_mancha = True
-        self.visor.setDragMode(QGraphicsView.NoDrag)
-        self.visor.setCursor(Qt.CrossCursor)
-        self.visor.setFocus()
-        self.statusBar().showMessage(tr("sunspot_instructions"))
-
-    def _terminar_modo_mancha(self):
-        self.visor.limpiar_previsualizacion_region_mancha()
-        self.visor.modo_etiquetado_mancha = False
-        self.visor.setDragMode(QGraphicsView.ScrollHandDrag)
-        self.visor.unsetCursor()
-
-    def crear_region_mancha_manual(
-        self,
-        x,
-        y,
-        ancho,
-        alto,
-    ):
-        nombre = None
-        datos_catalogo = None
-        preguntar = True
-
-        if self.ultimas_regiones_catalogo:
-            opcion_manual = tr("manual_region_name")
-            opciones = [opcion_manual]
-            por_opcion = {}
-
-            for region in self.ultimas_regiones_catalogo:
-                conteo = (
-                    tr(
-                        "catalog_spot_suffix",
-                        count=region.manchas,
-                    )
-                    if region.manchas is not None
-                    else ""
-                )
-                opcion = (
-                    f"{region.nombre} · "
-                    f"{region.ubicacion or '—'}{conteo}"
-                )
-                opciones.append(opcion)
-                por_opcion[opcion] = region
-
-            elegida, aceptado = QInputDialog.getItem(
-                self,
-                tr("select_active_region"),
-                tr("select_active_region_prompt"),
-                opciones,
-                0,
-                False,
-            )
-            if not aceptado:
-                self._terminar_modo_mancha()
-                return
-
-            region = por_opcion.get(elegida)
-            if region is not None:
-                nombre = self._nombre_region_catalogo(region)
-                datos_catalogo = (
-                    self._datos_region_catalogo(region)
-                )
-                preguntar = False
-
-        self.crear_etiqueta_mancha(
-            x,
-            y,
-            nombre=nombre,
-            preguntar=preguntar,
-            ancho=ancho,
-            alto=alto,
-            datos_catalogo=datos_catalogo,
-        )
-
-    def crear_etiqueta_mancha(
-        self,
-        x,
-        y,
-        nombre=None,
-        preguntar=True,
-        registrar=True,
-        radio=18,
-        ancho=None,
-        alto=None,
-        datos_catalogo=None,
-    ):
-        self._terminar_modo_mancha()
-
-        if self.visor.elemento_imagen is None:
-            return None
-
-        if nombre is None:
-            nombre = tr(
-                "sunspot_default",
-                number=len(self.etiquetas_manchas) + 1,
-            )
-
-        if preguntar:
-            nombre, aceptado = QInputDialog.getText(
-                self,
-                tr("sunspot_name_title"),
-                tr("sunspot_name_prompt"),
-                text=nombre,
-            )
-
-            if not aceptado:
-                self.statusBar().showMessage(
-                    tr("sunspot_cancelled")
-                )
-                return None
-
-            nombre = nombre.strip() or tr(
-                "sunspot_default",
-                number=len(self.etiquetas_manchas) + 1,
-            )
-
-        if registrar:
-            self.registrar_estado()
-
-        etiqueta = EtiquetaMancha(
-            self.visor.escena,
-            QPointF(float(x), float(y)),
-            nombre,
-            self.visor.elemento_imagen.boundingRect(),
-            color=self.color_anotaciones,
-            tamano_texto=self.tamano_anotaciones,
-            radio=radio,
-            ancho=ancho,
-            alto=alto,
-            datos_catalogo=datos_catalogo,
-            al_eliminar=self.eliminar_etiqueta_mancha,
-            al_editar=self.editar_etiqueta_mancha,
-            antes_cambiar=self.registrar_estado,
-        )
-        self.etiquetas_manchas.append(etiqueta)
-        self.statusBar().showMessage(
-            tr("sunspot_created", name=nombre)
-        )
-        return etiqueta
-
-    def editar_etiqueta_mancha(self, etiqueta):
-        nombre, aceptado = QInputDialog.getText(
-            self,
-            tr("sunspot_name_title"),
-            tr("sunspot_name_prompt"),
-            text=etiqueta.nombre,
-        )
-
-        if not aceptado or not nombre.strip():
-            return
-
-        self.registrar_estado()
-        etiqueta.establecer_nombre(nombre.strip())
-        self.statusBar().showMessage(
-            tr("sunspot_renamed", name=nombre.strip())
-        )
-
-    def eliminar_etiqueta_mancha(self, etiqueta):
-        if etiqueta in self.etiquetas_manchas:
-            self.etiquetas_manchas.remove(etiqueta)
-
-        self.statusBar().showMessage(tr("sunspot_deleted"))
-
     def iniciar_medicion_protuberancia(self):
-        self._terminar_modo_mancha()
-
         if self.visor.modo_medicion_filamento:
             self.cancelar_medicion_filamento()
 
         if self.visor.circulo_limbo is None:
             QMessageBox.information(
                 self,
-                tr("first_adjust_limb"),
-                tr("prominence_needs_limb"),
+                "Primero ajusta el limbo",
+                "Autodetecta el disco o realiza un ajuste "
+                "parcial antes de medir una protuberancia.",
             )
             return
 
@@ -3824,7 +2071,7 @@ class VentanaPrincipal(QMainWindow):
         self.visor.setDragMode(QGraphicsView.NoDrag)
         self.visor.setCursor(Qt.CrossCursor)
         self.statusBar().showMessage(
-            tr("click_prominence_tip")
+            "Haz clic en la punta de la protuberancia"
         )
 
     def crear_medicion_protuberancia(self, x, y):
@@ -3854,17 +2101,17 @@ class VentanaPrincipal(QMainWindow):
         )
         self.mediciones_protuberancias.append(medicion)
         self.statusBar().showMessage(
-            tr("prominence_created")
+            "Medición creada; arrastra el punto rosa "
+            "para ajustarla"
         )
 
     def iniciar_medicion_filamento(self):
-        self._terminar_modo_mancha()
-
         if self.visor.elemento_imagen is None:
             QMessageBox.information(
                 self,
-                tr("first_open_image"),
-                tr("need_solar_image_filament"),
+                "Primero abre una imagen",
+                "Necesitas cargar una fotografía solar "
+                "antes de medir un filamento.",
             )
             return
 
@@ -3878,7 +2125,9 @@ class VentanaPrincipal(QMainWindow):
         self.visor.setFocus()
         self.boton_aceptar_filamento.setVisible(True)
         self.statusBar().showMessage(
-            tr("filament_instructions")
+            "Filamento: clic izquierdo añade puntos · "
+            "clic derecho retira el último · Enter finaliza · "
+            "Esc cancela"
         )
 
     def _escala_activa(self):
@@ -3898,8 +2147,9 @@ class VentanaPrincipal(QMainWindow):
         if escala is None:
             QMessageBox.information(
                 self,
-                tr("first_calibrate"),
-                tr("filament_needs_scale"),
+                "Primero calibra la imagen",
+                "Ajusta el limbo o utiliza la calibración "
+                "del equipo antes de medir un filamento.",
             )
             self.cancelar_medicion_filamento()
             return
@@ -3923,10 +2173,8 @@ class VentanaPrincipal(QMainWindow):
             self.filamento_en_curso.agregar_punto(punto)
 
         self.statusBar().showMessage(
-            tr(
-                "filament_progress",
-                count=len(self.filamento_en_curso.puntos),
-            )
+            f"Filamento: {len(self.filamento_en_curso.puntos)} "
+            "puntos · Enter finaliza · Esc cancela"
         )
 
     def quitar_ultimo_punto_filamento(self, x, y):
@@ -3955,7 +2203,8 @@ class VentanaPrincipal(QMainWindow):
 
         if distancias[indice] > tolerancia:
             self.statusBar().showMessage(
-                tr("right_click_point")
+                "Clic derecho directamente sobre el punto "
+                "que deseas eliminar"
             )
             return
 
@@ -3973,7 +2222,7 @@ class VentanaPrincipal(QMainWindow):
             else 0
         )
         self.statusBar().showMessage(
-            tr("filament_points", count=cantidad)
+            f"Filamento: {cantidad} puntos marcados"
         )
 
     def finalizar_medicion_filamento(self):
@@ -3983,8 +2232,9 @@ class VentanaPrincipal(QMainWindow):
         ):
             QMessageBox.information(
                 self,
-                tr("missing_points"),
-                tr("filament_two_points"),
+                "Faltan puntos",
+                "Marca al menos dos puntos para medir "
+                "la longitud proyectada del filamento.",
             )
             return
 
@@ -3994,7 +2244,8 @@ class VentanaPrincipal(QMainWindow):
         self.filamento_en_curso = None
         self._terminar_modo_filamento()
         self.statusBar().showMessage(
-            tr("filament_measured")
+            "Filamento medido; arrastra sus puntos para "
+            "afinar el trazado"
         )
 
     def cancelar_medicion_filamento(self):
@@ -4006,7 +2257,7 @@ class VentanaPrincipal(QMainWindow):
 
         self._terminar_modo_filamento()
         self.statusBar().showMessage(
-            tr("filament_cancelled")
+            "Medición de filamento cancelada"
         )
 
     def _terminar_modo_filamento(self):
@@ -4024,7 +2275,7 @@ class VentanaPrincipal(QMainWindow):
             self.mediciones_filamentos.remove(medicion)
 
         self.statusBar().showMessage(
-            tr("filament_deleted")
+            "Medición de filamento eliminada"
         )
 
     def eliminar_medicion_individual(self, medicion):
@@ -4032,7 +2283,7 @@ class VentanaPrincipal(QMainWindow):
             self.mediciones_protuberancias.remove(medicion)
 
         self.statusBar().showMessage(
-            tr("measurement_deleted")
+            "Medición individual eliminada"
         )
 
     def capturar_estado(self):
@@ -4062,29 +2313,15 @@ class VentanaPrincipal(QMainWindow):
             if not medicion.eliminada
         ]
 
-        manchas = [
-            etiqueta.estado()
-            for etiqueta in self.etiquetas_manchas
-            if not etiqueta.eliminada
-        ]
-
         return {
             "circulo": estado_circulo,
             "mediciones": mediciones,
             "filamentos": filamentos,
-            "manchas": manchas,
             "comparacion_tierra_luna": (
                 self.comparacion_tierra_luna.estado()
                 if self.comparacion_tierra_luna is not None
                 else None
             ),
-            "comparaciones_planetas": [
-                comparacion.estado()
-                for comparacion in (
-                    self.comparaciones_planetas.values()
-                )
-                if not comparacion.eliminada
-            ],
         }
 
     def registrar_estado(self):
@@ -4111,7 +2348,7 @@ class VentanaPrincipal(QMainWindow):
     def deshacer_ultimo_cambio(self):
         if not self.historial_estados:
             self.statusBar().showMessage(
-                tr("nothing_to_undo")
+                "No hay cambios que deshacer"
             )
             return
 
@@ -4144,12 +2381,6 @@ class VentanaPrincipal(QMainWindow):
 
             self.mediciones_filamentos.clear()
 
-            for etiqueta in self.etiquetas_manchas[:]:
-                etiqueta.antes_cambiar = None
-                etiqueta.eliminar()
-
-            self.etiquetas_manchas.clear()
-
             if self.comparacion_tierra_luna is not None:
                 comparacion = self.comparacion_tierra_luna
                 self.comparacion_tierra_luna = None
@@ -4157,15 +2388,6 @@ class VentanaPrincipal(QMainWindow):
                 comparacion.eliminar()
 
             self.accion_quitar_tierra_luna.setEnabled(False)
-
-            for comparacion in list(
-                self.comparaciones_planetas.values()
-            ):
-                comparacion.antes_cambiar = None
-                comparacion.eliminar()
-
-            self.comparaciones_planetas.clear()
-            self.accion_quitar_planetas.setEnabled(False)
 
             for datos in estado["mediciones"]:
                 self.crear_medicion_protuberancia(
@@ -4196,29 +2418,6 @@ class VentanaPrincipal(QMainWindow):
                         medicion
                     )
 
-            for datos_mancha in estado.get("manchas", []):
-                self.crear_etiqueta_mancha(
-                    datos_mancha["x"],
-                    datos_mancha["y"],
-                    nombre=datos_mancha.get(
-                        "nombre",
-                        tr(
-                            "sunspot_default",
-                            number=(
-                                len(self.etiquetas_manchas) + 1
-                            ),
-                        ),
-                    ),
-                    preguntar=False,
-                    registrar=False,
-                    radio=datos_mancha.get("radio", 18),
-                    ancho=datos_mancha.get("ancho"),
-                    alto=datos_mancha.get("alto"),
-                    datos_catalogo=datos_mancha.get(
-                        "catalogo"
-                    ),
-                )
-
             datos_comparacion = estado.get(
                 "comparacion_tierra_luna"
             )
@@ -4230,29 +2429,6 @@ class VentanaPrincipal(QMainWindow):
                         False,
                     )
                 )
-                color_distancia = datos_comparacion.get(
-                    "color_distancia",
-                    self.color_distancia_tierra_luna,
-                )
-                mostrar_linea_distancia = bool(
-                    datos_comparacion.get(
-                        "mostrar_linea_distancia",
-                        self.mostrar_linea_distancia,
-                    )
-                )
-                color_informacion = datos_comparacion.get(
-                    "color_informacion",
-                    self.color_informacion_planetas,
-                )
-                self.color_distancia_tierra_luna = (
-                    color_distancia
-                )
-                self.mostrar_linea_distancia = (
-                    mostrar_linea_distancia
-                )
-                self.color_informacion_planetas = (
-                    color_informacion
-                )
                 self.opcion_distancia_tierra_luna.blockSignals(
                     True
                 )
@@ -4262,11 +2438,6 @@ class VentanaPrincipal(QMainWindow):
                 self.opcion_distancia_tierra_luna.blockSignals(
                     False
                 )
-                self.opcion_linea_distancia.blockSignals(True)
-                self.opcion_linea_distancia.setChecked(
-                    mostrar_linea_distancia
-                )
-                self.opcion_linea_distancia.blockSignals(False)
                 self.comparacion_tierra_luna = (
                     ComparacionTierraLuna(
                         self.visor.escena,
@@ -4289,11 +2460,6 @@ class VentanaPrincipal(QMainWindow):
                                 self.ruta_imagen_luna,
                             )
                         ),
-                        color_distancia=color_distancia,
-                        mostrar_linea_distancia=(
-                            mostrar_linea_distancia
-                        ),
-                        color_informacion=color_informacion,
                         al_eliminar=(
                             self.eliminar_comparacion_tierra_luna
                         ),
@@ -4302,22 +2468,8 @@ class VentanaPrincipal(QMainWindow):
                 )
                 self.accion_quitar_tierra_luna.setEnabled(True)
 
-            if escala is not None:
-                for datos_planeta in estado.get(
-                    "comparaciones_planetas",
-                    [],
-                ):
-                    self._crear_planeta_desde_estado(
-                        datos_planeta,
-                        escala,
-                    )
-
-            self.accion_quitar_planetas.setEnabled(
-                bool(self.comparaciones_planetas)
-            )
-
             self.statusBar().showMessage(
-                tr("change_undone")
+                "Último cambio deshecho"
             )
         finally:
             self.suspendiendo_historial = False
@@ -4327,7 +2479,6 @@ class VentanaPrincipal(QMainWindow):
         if (
             not self.mediciones_protuberancias
             and not self.mediciones_filamentos
-            and not self.etiquetas_manchas
             and self.filamento_en_curso is None
         ):
             return
@@ -4342,9 +2493,6 @@ class VentanaPrincipal(QMainWindow):
             for medicion in self.mediciones_filamentos[:]:
                 medicion.eliminar()
 
-            for etiqueta in self.etiquetas_manchas[:]:
-                etiqueta.eliminar()
-
             if self.filamento_en_curso is not None:
                 medicion = self.filamento_en_curso
                 self.filamento_en_curso = None
@@ -4355,17 +2503,16 @@ class VentanaPrincipal(QMainWindow):
 
         self.mediciones_protuberancias.clear()
         self.mediciones_filamentos.clear()
-        self.etiquetas_manchas.clear()
         self._terminar_modo_filamento()
-        self._terminar_modo_mancha()
-        self.statusBar().showMessage(tr("measurements_deleted"))
+        self.statusBar().showMessage("Mediciones eliminadas")
 
     def abrir_calibracion_equipo(self):
         if self.visor.ruta_imagen is None:
             QMessageBox.information(
                 self,
-                tr("first_open_image"),
-                tr("need_image_calibration"),
+                "Primero abre una imagen",
+                "Necesitas cargar una imagen para leer "
+                "sus metadatos y calibrarla.",
             )
             return
 
@@ -4391,11 +2538,11 @@ class VentanaPrincipal(QMainWindow):
         self.descripcion_calibracion = resultado.descripcion
 
         self.etiqueta_medicion.setText(
-            f"{tr('equipment_dialog')}\n"
+            "Calibración mediante el equipo\n"
             f"{resultado.descripcion}\n"
-            f"{tr('angular_scale')}: "
+            f"Escala angular: "
             f"{resultado.arcsec_por_pixel:.5f} ″/px\n"
-            f"{tr('active_physical_scale')}: "
+            f"Escala física activa: "
             f"{resultado.km_por_pixel:,.2f} km/px"
         )
         self.statusBar().showMessage(
@@ -4425,7 +2572,8 @@ class VentanaPrincipal(QMainWindow):
         self.actualizar_comparacion_tierra_luna()
 
         self.statusBar().showMessage(
-            tr("calibration_updated")
+            "Calibración actualizada y mediciones "
+            "recalculadas automáticamente"
         )
 
     def iniciar_ajuste_parcial(self):
@@ -4440,10 +2588,13 @@ class VentanaPrincipal(QMainWindow):
         self.boton_finalizar_parcial.setVisible(True)
         self.boton_cancelar_parcial.setVisible(True)
         self.etiqueta_medicion.setText(
-            tr("partial_instructions")
+            "Ajuste de limbo parcial\n"
+            "Clic izquierdo: añadir punto\n"
+            "Clic derecho: eliminar punto\n"
+            "Marca al menos 5 puntos sobre el arco."
         )
         self.statusBar().showMessage(
-            tr("partial_status")
+            "Marca puntos distribuidos sobre el limbo visible"
         )
 
     def actualizar_info_parcial(self, resultado):
@@ -4452,7 +2603,9 @@ class VentanaPrincipal(QMainWindow):
                 self.visor.puntos_limbo_parcial
             )
             self.etiqueta_medicion.setText(
-                tr("partial_need_points", count=cantidad)
+                "Ajuste de limbo parcial\n"
+                f"Puntos marcados: {cantidad}\n"
+                "Se necesitan al menos 3 puntos."
             )
             return
 
@@ -4460,24 +2613,22 @@ class VentanaPrincipal(QMainWindow):
         incertidumbre = resultado.incertidumbre_radio_px
 
         if cobertura < 45:
-            calidad = tr("quality_very_low")
+            calidad = "Muy baja: amplía el arco marcado"
         elif cobertura < 90:
-            calidad = tr("quality_limited")
+            calidad = "Limitada"
         elif cobertura < 180:
-            calidad = tr("quality_good")
+            calidad = "Buena"
         else:
-            calidad = tr("quality_excellent")
+            calidad = "Excelente"
 
         self.etiqueta_medicion.setText(
-            tr(
-                "partial_preview",
-                points=resultado.puntos_usados,
-                coverage=cobertura,
-                radius=resultado.radio,
-                residual=resultado.residuo_px,
-                uncertainty=incertidumbre,
-                quality=calidad,
-            )
+            "Previsualización del limbo parcial\n"
+            f"Puntos: {resultado.puntos_usados}\n"
+            f"Cobertura: {cobertura:.1f}°\n"
+            f"Radio: {resultado.radio:.1f} px\n"
+            f"Residuo: ±{resultado.residuo_px:.2f} px\n"
+            f"Incertidumbre radio: ±{incertidumbre:.1f} px\n"
+            f"Calidad geométrica: {calidad}"
         )
 
     def finalizar_ajuste_parcial(self):
@@ -4488,7 +2639,7 @@ class VentanaPrincipal(QMainWindow):
         if resultado is None:
             return
 
-        self.modo_ajuste = tr("partial_limb_mode")
+        self.modo_ajuste = "Limbo parcial ajustado por puntos"
         self.error_limbo_px = resultado.residuo_px
         self.incertidumbre_radio_px = (
             resultado.incertidumbre_radio_px
@@ -4509,16 +2660,14 @@ class VentanaPrincipal(QMainWindow):
         self.visor.cancelar_limbo_parcial()
         self.boton_finalizar_parcial.setVisible(False)
         self.boton_cancelar_parcial.setVisible(False)
-        self.etiqueta_medicion.setText(
-            tr("pending_calibration")
-        )
-        self.statusBar().showMessage(tr("partial_cancelled"))
+        self.etiqueta_medicion.setText("Calibración pendiente")
+        self.statusBar().showMessage("Ajuste parcial cancelado")
 
     def iniciar_ajuste_limbo(self):
         if self.visor.modo_medicion_filamento:
             self.cancelar_medicion_filamento()
 
-        self.modo_ajuste = tr("manual_limb")
+        self.modo_ajuste = "Ajuste manual del limbo"
         self.error_limbo_px = None
         self.incertidumbre_radio_px = None
         self.muestras_circulos = []
@@ -4533,24 +2682,24 @@ class VentanaPrincipal(QMainWindow):
         if self.visor.ruta_imagen is None:
             QMessageBox.information(
                 self,
-                tr("first_open_image"),
-                tr("need_solar_image"),
+                "Primero abre una imagen",
+                "Necesitas cargar una fotografía solar.",
             )
             return
 
         QApplication.setOverrideCursor(Qt.WaitCursor)
-        self.statusBar().showMessage(tr("analyzing_limb"))
+        self.statusBar().showMessage("Analizando el limbo solar…")
 
         try:
             resultado = detectar_limbo(self.visor.ruta_imagen)
         except ErrorDeteccionLimbo as error:
             QMessageBox.warning(
                 self,
-                tr("limb_detection_failed"),
+                "No fue posible detectar el limbo",
                 str(error),
             )
             self.statusBar().showMessage(
-                tr("limb_not_conclusive")
+                "Autodetección no concluyente; usa el ajuste manual"
             )
             return
         finally:
@@ -4561,7 +2710,7 @@ class VentanaPrincipal(QMainWindow):
                 self.visor.circulo_limbo
             )
 
-        self.modo_ajuste = tr("automatic_limb")
+        self.modo_ajuste = "Limbo detectado automáticamente"
         self.error_limbo_px = resultado.error_px
         self.incertidumbre_radio_px = None
         self.muestras_circulos = []
@@ -4582,7 +2731,7 @@ class VentanaPrincipal(QMainWindow):
         color = QColorDialog.getColor(
             self.color_limbo,
             self,
-            tr("select_outline_color"),
+            "Seleccionar color del contorno",
         )
 
         if not color.isValid():
@@ -4650,8 +2799,7 @@ class VentanaPrincipal(QMainWindow):
         if self.error_limbo_px is not None:
             error_km = self.error_limbo_px * km_por_pixel
             detalle_error = (
-                f"\n{tr('residual')}: "
-                f"±{self.error_limbo_px:.2f} px"
+                f"\nResiduo: ±{self.error_limbo_px:.2f} px"
                 f" (±{error_km:,.0f} km)"
             )
 
@@ -4661,63 +2809,47 @@ class VentanaPrincipal(QMainWindow):
                     * km_por_pixel
                 )
                 detalle_error += (
-                    f"\n{tr('radius_uncertainty')}: "
+                    f"\nIncertidumbre del radio: "
                     f"±{self.incertidumbre_radio_px:.2f} px"
                     f" (±{incertidumbre_km:,.0f} km)"
                 )
 
             detalle_error += (
-                f"\n{tr('points_used')}: {self.puntos_limbo}"
+                f"\nPuntos usados: {self.puntos_limbo}"
             )
 
         self.etiqueta_medicion.setText(
             f"{self.modo_ajuste}\n"
-            f"{tr('center')}: "
-            f"{centro_x:.1f}, {centro_y:.1f} px\n"
-            f"{tr('radius')}: {radio:.1f} px\n"
-            f"{tr('diameter')}: {diametro:.1f} px\n"
-            f"{tr('limb_scale')}: "
+            f"Centro: {centro_x:.1f}, {centro_y:.1f} px\n"
+            f"Radio: {radio:.1f} px\n"
+            f"Diámetro: {diametro:.1f} px\n"
+            f"Escala por limbo: "
             f"{escala_limbo:,.1f} km/px\n"
-            f"{tr('active_scale')}: "
-            f"{km_por_pixel:,.1f} km/px"
+            f"Escala activa: {km_por_pixel:,.1f} km/px"
             f"{detalle_error}"
         )
         self.statusBar().showMessage(
-            f"{tr('solar_diameter')}: {diametro:.1f} px · "
-            f"{tr('provisional_scale')}: "
-            f"{km_por_pixel:,.1f} km/px"
+            f"Diámetro solar: {diametro:.1f} px · "
+            f"Escala provisional: {km_por_pixel:,.1f} km/px"
         )
 
     def actualizar_informacion(self, ruta):
         archivo = Path(ruta)
         self.mediciones_protuberancias.clear()
         self.mediciones_filamentos.clear()
-        self.etiquetas_manchas.clear()
-        self.ultimas_regiones_catalogo.clear()
-        self.instante_catalogo = None
-        self.ruta_referencia_catalogo = None
-        self.nombre_fuente_referencia_catalogo = ""
-        self.detalle_alineacion_catalogo = ""
-        self.boton_referencia_solar.setVisible(False)
         self.filamento_en_curso = None
         self.ruta_proyecto_actual = None
         self.comparacion_tierra_luna = None
-        self.comparaciones_planetas.clear()
         self.accion_quitar_tierra_luna.setEnabled(False)
-        self.accion_quitar_planetas.setEnabled(False)
         self.opcion_distancia_tierra_luna.blockSignals(True)
         self.opcion_distancia_tierra_luna.setChecked(False)
         self.opcion_distancia_tierra_luna.blockSignals(False)
         self._terminar_modo_filamento()
-        self._terminar_modo_mancha()
         self.historial_estados.clear()
         self.regla_solar = None
-        self.boton_regla.setText(tr("show_ruler"))
+        self.boton_regla.setText("Mostrar regla solar")
         self.escala_equipo_km = None
         self.descripcion_calibracion = None
-        self.etiqueta_medicion.setText(
-            tr("pending_calibration")
-        )
         self.ajustes.setValue(
             "archivos/ultima_carpeta",
             str(archivo.parent),
@@ -4726,18 +2858,14 @@ class VentanaPrincipal(QMainWindow):
 
         self.etiqueta_archivo.setText(
             f"{archivo.name}\n"
-            f"{pixmap.width()} × {pixmap.height()} "
-            f"{tr('pixels')}"
+            f"{pixmap.width()} × {pixmap.height()} píxeles"
         )
-        self.statusBar().showMessage(
-            tr("image_loaded", name=archivo.name)
-        )
+        self.statusBar().showMessage(f"Imagen cargada: {archivo.name}")
 
     def closeEvent(self, event):
         if (
             not self.mediciones_protuberancias
             and not self.mediciones_filamentos
-            and not self.etiquetas_manchas
             and self.filamento_en_curso is None
             and self.comparacion_tierra_luna is None
         ):
@@ -4746,8 +2874,9 @@ class VentanaPrincipal(QMainWindow):
 
         respuesta = QMessageBox.question(
             self,
-            tr("close_title"),
-            tr("close_question"),
+            "Cerrar Ne-notoka HelioRegla",
+            "Hay mediciones en la imagen. "
+            "¿Estás seguro de que deseas cerrar?",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )

@@ -1,0 +1,70 @@
+from pathlib import Path
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
+    QLabel,
+    QScrollArea,
+    QVBoxLayout,
+)
+
+from i18n import tr
+
+
+class DialogoReferenciaSolar(QDialog):
+    def __init__(
+        self,
+        ruta_imagen,
+        fuente,
+        detalle_alineacion="",
+        parent=None,
+    ):
+        super().__init__(parent)
+        self.setWindowTitle(tr("solar_reference_title"))
+        self.resize(900, 820)
+
+        principal = QVBoxLayout(self)
+        explicacion = QLabel(
+            tr(
+                "solar_reference_text",
+                source=fuente,
+            )
+        )
+        explicacion.setWordWrap(True)
+        principal.addWidget(explicacion)
+
+        if detalle_alineacion:
+            detalle = QLabel(detalle_alineacion)
+            detalle.setWordWrap(True)
+            detalle.setObjectName("informacion")
+            principal.addWidget(detalle)
+
+        etiqueta = QLabel()
+        etiqueta.setAlignment(Qt.AlignCenter)
+        pixmap = QPixmap(str(Path(ruta_imagen)))
+        etiqueta.setPixmap(
+            pixmap.scaled(
+                820,
+                680,
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation,
+            )
+        )
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(etiqueta)
+        principal.addWidget(scroll, 1)
+
+        nota = QLabel(tr("solar_reference_note"))
+        nota.setWordWrap(True)
+        principal.addWidget(nota)
+
+        botones = QDialogButtonBox(QDialogButtonBox.Close)
+        botones.button(QDialogButtonBox.Close).setText(
+            tr("close")
+        )
+        botones.rejected.connect(self.reject)
+        principal.addWidget(botones)

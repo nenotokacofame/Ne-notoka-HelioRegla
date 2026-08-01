@@ -1,0 +1,49 @@
+AVISOS DE COMPONENTES DE TERCEROS / THIRD-PARTY NOTICES
+Ne-notoka HelioRegla 1.0.0
+
+Ne-notoka HelioRegla incluye bibliotecas de terceros que no están cubiertas
+por la Licencia de uso gratuito Ne-notoka HelioRegla 1.0. Cada biblioteca se
+rige por sus propios términos. El proceso oficial de construcción copia los
+textos de licencia correspondientes a la carpeta licencias_terceros del
+programa instalado.
+
+La distribución para Windows utiliza enlaces dinámicos con las bibliotecas Qt
+incluidas por PySide6. Las restricciones de la licencia de HelioRegla no
+limitan los derechos concedidos sobre componentes de terceros por sus propias
+licencias.
+
+Componentes principales:
+
+- Python: Python Software Foundation License.
+  https://docs.python.org/3/license.html
+- PySide6 / Qt for Python / Shiboken6: LGPLv3/GPLv3 o licencia comercial,
+  según el componente y la distribución utilizada.
+  https://doc.qt.io/qtforpython-6/licenses.html
+- NumPy: licencia BSD de tres cláusulas.
+  https://numpy.org/doc/stable/license.html
+- OpenCV: Apache License 2.0 y avisos de terceros aplicables.
+  https://opencv.org/license/
+- Pillow: licencia HPND histórica de Pillow.
+  https://python-pillow.github.io/
+- PyInstaller: GPL con excepción especial para distribuir aplicaciones
+  compiladas y licencias de su cargador y componentes.
+  https://pyinstaller.org/en/stable/license.html
+
+Las consultas y referencias solares pueden usar datos o imágenes de
+NOAA/SWPC, HEK, NASA/SDO, GONG y Helioviewer. Dichas instituciones conservan
+sus respectivos derechos, avisos y condiciones de uso.
+
+--------------------------------------------------------------------------
+
+Ne-notoka HelioRegla includes third-party libraries that are not covered by
+the Ne-notoka HelioRegla Free-Use License 1.0. Each library is governed by its
+own terms. The official build process copies the applicable license texts to
+the installed application's licencias_terceros folder.
+
+The Windows distribution dynamically links to the Qt libraries supplied by
+PySide6. HelioRegla license restrictions do not limit rights granted over
+third-party components by their respective licenses.
+
+Solar queries and references may use data or imagery from NOAA/SWPC, HEK,
+NASA/SDO, GONG and Helioviewer. Those institutions retain their respective
+rights, notices and terms of use.

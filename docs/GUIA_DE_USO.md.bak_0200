@@ -215,22 +215,6 @@ fuentes solares:
 6. Decide si la anotación debe incluir la cantidad de manchas reportada.
 7. Revisa la tabla y desmarca las regiones que no deseas añadir.
 
-La fecha se interpreta en este orden: `DATE-OBS` de FITS, nombre del archivo,
-EXIF y fecha actual. El nombre tiene prioridad sobre EXIF porque programas de
-procesado y exportación pueden guardar la hora de edición en lugar de la
-captura. HelioRegla muestra el fragmento exacto que reconoció, por ejemplo
-`2026-07-04-1915`, para que lo confirmes antes de consultar.
-
-Se admiten, entre otros, formatos como `2026-07-04-1915`,
-`2026-07-04_19-15-30`, `20260704_191530`, `20260704191530` y
-`04-07-2026_1915`. Los segundos son opcionales. La hora interpretada se trata
-como UTC y siempre puede corregirse manualmente en el diálogo.
-
-La hora se conserva literalmente como UTC: un nombre terminado en `-2218`
-aparece como **22:18 UTC**, sin restarle las seis horas de la zona de Ciudad
-de México. El origen de la fecha también cambia de idioma junto con la
-interfaz.
-
 Con un limbo ajustado, HelioRegla compara estructuras del disco con las
 referencias disponibles y proyecta las coordenadas del catálogo sobre la
 fotografía. Cada AR se refina únicamente dentro de una vecindad de su posición
@@ -248,12 +232,6 @@ magnética. Sirve para validar visualmente el resultado y para facilitar un
 ajuste manual cuando distintas longitudes de onda muestren estructuras muy
 diferentes. La rueda amplía la referencia, el arrastre la desplaza y los
 botones **Ajustar a ventana** y **Tamaño real** recuperan vistas conocidas.
-
-El óvalo de una AR representa la extensión aproximada de la **región
-completa**, calculada con el área y la extensión del SRS. No identifica por
-separado cada poro. Por eso un grupo disperso puede contener manchas pequeñas
-alejadas del centro informado por NOAA; el óvalo se amplía para comunicar esa
-extensión y sigue siendo una guía ajustable.
 
 Las etiquetas de la fotografía muestran únicamente la clasificación magnética
 NOAA (por ejemplo, `Beta-Gamma`), no una polaridad estimada a partir de la
@@ -284,20 +262,3 @@ modo. Las regiones se incluyen en Ctrl+Z, la exportación y los proyectos
 NOAA numera regiones activas, no cada poro o mancha individual. Varias manchas
 pueden pertenecer a una sola AR y una estructura recién aparecida podría no
 estar todavía en el informe diario.
-
-## Acerca de, licencia y apoyo
-
-El menú **Ayuda** abre tres secciones:
-
-- **Acerca de:** versión, autor, proyecto y créditos de las fuentes solares.
-- **Licencia:** texto completo de la Licencia de uso gratuito Ne-notoka
-  HelioRegla 1.0. Permite usar el programa y compartir su instalador oficial
-  intacto, pero no modificarlo ni redistribuir versiones alteradas.
-- Las fotografías, proyectos, mediciones y exportaciones pertenecen a sus
-  usuarios.
-- **Apoyar:** invitación opcional para contribuir al desarrollo, el sitio web
-  y las actividades de divulgación de Ne-notoka Cofame.
-
-Los donativos no desbloquean herramientas ni cambian las funciones del
-programa. La sección incluye el enlace oficial
-`https://paypal.me/nenotokacofame` y permite copiar el correo de contacto.
