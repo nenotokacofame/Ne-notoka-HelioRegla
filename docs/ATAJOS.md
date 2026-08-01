@@ -83,8 +83,9 @@ trazar otro. Las curvas y resultados anteriores permanecen visibles.
 - La hora escrita en el nombre se conserva como UTC sin convertirla a la zona
   local; `2218` se muestra como `22:18 UTC`.
 - **Alinear automáticamente:** compara la fotografía con HMI, GONG H-alpha y
-  AIA 1700 Å; reconoce orientación normal o invertida. Solo modifica la
-  orientación cuando la confianza es alta.
+  AIA 1700 Å; reconoce orientación normal o invertida y tolera pequeños
+  errores del radio del limbo. Aplica una coincidencia media cuando hay
+  suficientes regiones compactas y muestra la confianza en los resultados.
 - **Referencia:** permite elegir H-alfa, continuo, 1700 Å como aproximación
   visual a CaK o comparación automática.
 - **Ver referencia solar anotada:** abre la imagen oficial norte-arriba con
@@ -97,6 +98,8 @@ trazar otro. Las curvas y resultados anteriores permanecen visibles.
   región activa.
 - **Clic izquierdo breve:** crea una región circular pequeña.
 - **Clic izquierdo y arrastrar una región existente:** mueve la anotación.
+- **Arrastrar el control de la esquina del óvalo:** cambia su ancho y alto sin
+  mover el centro de la región. El tamaño se limita a la fotografía.
 - **Doble clic:** cambia el nombre de la etiqueta.
 - **Clic derecho sobre la etiqueta:** elimina únicamente esa región.
 - **Esc o clic derecho mientras se dibuja:** cancela el modo.

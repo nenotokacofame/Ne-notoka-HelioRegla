@@ -14,6 +14,33 @@
 - Construcción automatizada con PyInstaller e Inno Setup: instalador bilingüe,
   icono Ne-notoka, accesos directos, licencia visible y desinstalador.
 - Avisos y licencias de componentes de terceros incluidos en la distribución.
+- El alineamiento automático de regiones activas compara ahora estructuras
+  compactas de manchas, no la textura completa del disco. Esto mejora la
+  correspondencia entre fotografías Seestar/luz visible y referencias HMI,
+  GONG o AIA, admite imágenes invertidas y prueba las cuatro combinaciones de
+  espejo antes de aceptar la orientación.
+- Para H-alfa y otras longitudes con textura muy diferente se añadió una
+  segunda solución guiada por las coordenadas NOAA/HEK: busca las AR en la
+  propia fotografía y usa la referencia anotada únicamente como comprobación.
+- Corregido el caso en que una mancha ocupa pocos píxeles: la alineación guiada
+  usa picos compactos y coincidencias de varias AR, en lugar del percentil de
+  toda la ventana que podía quedar en cero. La orientación con confianza media
+  también se aplica cuando la evidencia catalogada supera a la correlación
+  global.
+- Las etiquetas de la referencia y de la fotografía conservan ahora la
+  posición heliográfica NOAA/HEK; ya no se desplazan automáticamente hacia
+  filamentos o plages cercanas.
+- Al editar rotación o espejos en el diálogo de regiones activas se desactiva
+  la alineación automática, para que la orientación manual no sea reemplazada
+  silenciosamente al consultar NOAA/HEK.
+- La solución guiada por catálogo tolera pequeños errores del radio detectado
+  del limbo y aplica también resultados con confianza media o evidencia
+  suficiente; antes podía calcularlos y dejar intacta la orientación anterior.
+- Las regiones pequeñas reciben un óvalo mínimo más legible sin alterar su
+  posición ni el valor publicado por NOAA.
+- Cada óvalo de región activa incorpora un control de esquina para ajustar
+  manualmente su ancho y alto sin mover el centro; el cambio se guarda en
+  proyectos, exportaciones y Ctrl+Z.
 
 ## 0.21.0
 
@@ -50,8 +77,9 @@
   potencialmente perteneciente a otro instante del intervalo consultado.
 - Refinamiento local de cada AR alrededor de su posición catalogada; no se
   recupera el detector global por umbral que producía falsos positivos.
-- La orientación automática solo se aplica con confianza alta. Una
-  coincidencia media o baja conserva los valores manuales.
+- La orientación automática informa su confianza y aplica coincidencias medias
+  cuando hay evidencia suficiente; una coincidencia baja sin evidencia
+  conserva los valores manuales.
 - La referencia anotada utiliza las posiciones refinadas y distribuye sus
   textos para evitar superposiciones.
 - Zoom con rueda, desplazamiento por arrastre, Ajustar a ventana y Tamaño

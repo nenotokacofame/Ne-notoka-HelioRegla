@@ -87,6 +87,43 @@ class GrupoMancha(QGraphicsItemGroup):
         return super().itemChange(cambio, valor)
 
 
+class ControlTamanoMancha(QGraphicsEllipseItem):
+    """Control pequeño para redimensionar el óvalo de una región activa."""
+
+    def __init__(self, etiqueta):
+        super().__init__(-6, -6, 12, 12)
+        self.etiqueta = etiqueta
+        self.setAcceptedMouseButtons(Qt.LeftButton)
+        self.setAcceptHoverEvents(True)
+        self.setCursor(Qt.SizeFDiagCursor)
+        self.setZValue(2)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.etiqueta.notificar_inicio_cambio()
+            event.accept()
+            return
+        event.ignore()
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() & Qt.LeftButton:
+            centro = self.etiqueta.grupo.pos()
+            posicion = event.scenePos()
+            self.etiqueta.establecer_tamano(
+                abs(posicion.x() - centro.x()) * 2,
+                abs(posicion.y() - centro.y()) * 2,
+            )
+            event.accept()
+            return
+        event.ignore()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            event.accept()
+            return
+        event.ignore()
+
+
 class EtiquetaMancha:
     def __init__(
         self,
@@ -129,10 +166,12 @@ class EtiquetaMancha:
 
         self.grupo = GrupoMancha(self)
         self.marca = QGraphicsEllipseItem()
+        self.control_tamano = ControlTamanoMancha(self)
         self.linea = QGraphicsLineItem()
         self.texto = QGraphicsSimpleTextItem()
 
         self.grupo.addToGroup(self.marca)
+        self.grupo.addToGroup(self.control_tamano)
         self.grupo.addToGroup(self.linea)
         self.grupo.addToGroup(self.texto)
         self.escena.addItem(self.grupo)
@@ -159,6 +198,8 @@ class EtiquetaMancha:
         lapiz.setCapStyle(Qt.RoundCap)
         self.marca.setPen(lapiz)
         self.marca.setBrush(QBrush(Qt.NoBrush))
+        self.control_tamano.setPen(QPen(QColor("#ffffff"), 1))
+        self.control_tamano.setBrush(QBrush(QColor(self.color)))
         self.linea.setPen(lapiz)
 
         fuente = QFont("Century Gothic")
@@ -181,6 +222,7 @@ class EtiquetaMancha:
             self.ancho,
             self.alto,
         )
+        self.control_tamano.setPos(radio_x, radio_y)
         self.texto.setText(self.nombre)
 
         caja = self.texto.boundingRect()
@@ -237,6 +279,24 @@ class EtiquetaMancha:
                 QPointF(destino_x, destino_y),
             )
         )
+
+    def establecer_tamano(self, ancho, alto):
+        """Actualiza el ancho y alto del óvalo sin sacar la región de la foto."""
+        rectangulo = self.imagen_rect
+        centro = self.grupo.pos()
+        max_ancho = 2 * min(
+            centro.x() - rectangulo.left(),
+            rectangulo.right() - centro.x(),
+        )
+        max_alto = 2 * min(
+            centro.y() - rectangulo.top(),
+            rectangulo.bottom() - centro.y(),
+        )
+        max_ancho = max(12.0, max_ancho)
+        max_alto = max(12.0, max_alto)
+        self.ancho = min(max(12.0, float(ancho)), max_ancho)
+        self.alto = min(max(12.0, float(alto)), max_alto)
+        self.actualizar()
 
     def establecer_desplazamiento_texto(self, x, y):
         self.desplazamiento_texto = (float(x), float(y))

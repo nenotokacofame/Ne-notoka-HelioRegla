@@ -231,16 +231,30 @@ aparece como **22:18 UTC**, sin restarle las seis horas de la zona de Ciudad
 de México. El origen de la fecha también cambia de idioma junto con la
 interfaz.
 
-Con un limbo ajustado, HelioRegla compara estructuras del disco con las
-referencias disponibles y proyecta las coordenadas del catálogo sobre la
-fotografía. Cada AR se refina únicamente dentro de una vecindad de su posición
-NOAA/HEK; no se buscan manchas libremente por todo el disco. Solo aplica la
-orientación automática con confianza alta; con confianza media o baja conserva
-los controles manuales. Las etiquetas se distribuyen para reducir empalmes y
-siguen siendo editables: arrástralas con
+Si modificas la rotación o cualquiera de las casillas de inversión, HelioRegla
+desactiva automáticamente **Alinear automáticamente** y respeta exactamente
+la orientación manual elegida. Para volver a calcularla, vuelve a activar esa
+casilla antes de consultar.
+
+Con un limbo ajustado, HelioRegla busca picos compactos de contraste alrededor
+de las posiciones NOAA/HEK (en vez de buscar manchas libremente por todo el
+disco). Esto evita confundir granulación, filamentos y plages con una AR y
+funciona entre luz visible, continuo HMI, H-alfa y falso color, incluso con
+inversión. Se prueban las cuatro combinaciones de espejo; una coincidencia alta
+o media con varias AR puede aplicar la orientación automáticamente, mientras
+que una coincidencia baja conserva los controles manuales. Las posiciones
+heliográficas del catálogo no se desplazan hacia filamentos/plages cercanas.
+Las etiquetas se distribuyen para reducir empalmes y siguen siendo editables:
+arrástralas con
 clic izquierdo, renómbralas con doble clic o elimínalas con clic derecho.
 Repetir la consulta actualiza la posición de las AR ya colocadas en vez de
 duplicarlas.
+
+Cuando la fotografía es H-alfa, la orientación se resuelve además con las
+coordenadas NOAA/HEK directamente sobre la imagen. Esto evita exigir que la
+textura de GONG coincida píxel a píxel con la del telescopio del usuario. Si no
+hay suficientes estructuras visibles, HelioRegla conserva la orientación manual
+y lo indica en el mensaje de resultados.
 
 Tras la consulta aparece **Ver referencia solar anotada**. La imagen oficial
 muestra las AR en orientación norte-arriba, con número y clasificación
@@ -259,6 +273,12 @@ Las etiquetas de la fotografía muestran únicamente la clasificación magnétic
 NOAA (por ejemplo, `Beta-Gamma`), no una polaridad estimada a partir de la
 intensidad. Un mapa fiable de polaridad requiere magnetogramas; HelioRegla no
 la inventa a partir de imágenes H-alpha, CaK o luz visible.
+
+Cada óvalo de región activa incluye un pequeño control en su esquina inferior
+derecha. Arrástralo con el clic izquierdo para ampliar o reducir el ancho y el
+alto del óvalo; el centro y la posición de la AR no cambian y el tamaño se
+mantiene dentro de la fotografía. Esta edición también queda incluida en
+Ctrl+Z, la exportación y el proyecto `.helio`.
 
 La cantidad mostrada procede del campo `NN` del SRS: es el total de manchas
 visibles que NOAA atribuyó a la región, no una cuenta realizada por
