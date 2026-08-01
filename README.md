@@ -49,7 +49,6 @@ del programa.
 - [Guía de uso](docs/GUIA_DE_USO.md)
 - [Atajos y controles](docs/ATAJOS.md)
 - [Historial de cambios](CHANGELOG.md)
-- [Publicar en GitHub y verificar el instalador](docs/PUBLICAR_GITHUB.md)
 
 ## Descargas
 
