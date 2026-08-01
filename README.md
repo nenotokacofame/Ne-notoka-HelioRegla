@@ -50,9 +50,4 @@ del programa.
 - [Atajos y controles](docs/ATAJOS.md)
 - [Historial de cambios](CHANGELOG.md)
 
-## Descargas
 
-El instalador oficial de Windows se publica en la sección **Releases** de
-GitHub junto con `SHA256SUMS.txt`. El código fuente, la guía y la licencia se
-mantienen en este repositorio; el instalador no se incluye dentro del historial
-para evitar descargas pesadas y conservar una versión verificable.
