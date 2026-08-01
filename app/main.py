@@ -53,6 +53,7 @@ from referencia_solar import (
     descargar_referencias,
     refinar_posiciones_regiones,
     registrar_orientacion,
+    registrar_orientacion_catalogo,
 )
 from regla_solar import ReglaSolar
 
@@ -3389,6 +3390,7 @@ class VentanaPrincipal(QMainWindow):
             )
             circulo = self.visor.circulo_limbo
             resultado_registro = None
+            referencia_elegida = referencias[0]
 
             if (
                 alinear_automaticamente
@@ -3402,11 +3404,60 @@ class VentanaPrincipal(QMainWindow):
                     circulo.radio,
                     referencias,
                 )
+                referencia_elegida = resultado_registro.referencia
+
+                # En H-alfa la textura puede no correlacionar con la
+                # referencia aunque las posiciones NOAA sí sean visibles.
+                # El catálogo resuelve la orientación directamente sobre la
+                # fotografía y se prefiere cuando alcanza confianza alta.
+                resultado_catalogo = registrar_orientacion_catalogo(
+                    self.visor.ruta_imagen,
+                    circulo.pos().x(),
+                    circulo.pos().y(),
+                    circulo.radio,
+                    regiones,
+                    instante,
+                    referencia_elegida,
+                )
+                # La ruta guiada por NOAA/HEK debe tener prioridad sobre la
+                # correlación de textura. Esta última puede devolver una
+                # puntuación alta para una imagen H-alfa que se parece poco a
+                # HMI/GONG y, en ese caso, dejaba la orientación inicial como
+                # si la fotografía ya estuviera norte-arriba. Dos AR
+                # compactas catalogadas son una señal más útil: el resultado
+                # se aplica y la confianza se comunica aparte.
+                if (
+                    resultado_catalogo.confianza in ("alta", "media")
+                    or (
+                        resultado_catalogo.evidencia >= 2
+                        and resultado_catalogo.puntuacion >= 0.10
+                    )
+                ):
+                    resultado_registro = resultado_catalogo
+
                 confianza = tr(
                     "alignment_confidence_"
                     f"{resultado_registro.confianza}"
                 )
-                if resultado_registro.confianza == "alta":
+                # Una solución guiada por el catálogo no siempre puede
+                # alcanzar la etiqueta «alta» en H-alfa: la textura es muy
+                # distinta de HMI/GONG y a veces solo se ven dos o tres
+                # núcleos compactos.  Antes solo aplicábamos la orientación
+                # cuando era «alta», de modo que una solución con evidencia
+                # útil se calculaba pero la fotografía conservaba la
+                # orientación anterior (aparentemente no hacía nada).
+                # Aplicamos también una solución «media» o una solución con
+                # al menos dos coincidencias compactas y una puntuación
+                # positiva; la etiqueta de confianza sigue informando al
+                # usuario del grado de seguridad.
+                orientacion_utilizable = (
+                    resultado_registro.confianza in ("alta", "media")
+                    or (
+                        resultado_registro.evidencia >= 2
+                        and resultado_registro.puntuacion >= 0.20
+                    )
+                )
+                if orientacion_utilizable:
                     self.rotacion_catalogo = (
                         resultado_registro.rotacion
                     )
@@ -3423,6 +3474,19 @@ class VentanaPrincipal(QMainWindow):
                         ),
                         rotation=self.rotacion_catalogo,
                         confidence=confianza,
+                        mirrors=(
+                            tr("mirror_summary_both")
+                            if (
+                                resultado_registro.espejo_horizontal
+                                and resultado_registro.espejo_vertical
+                            )
+                            else tr("mirror_summary_horizontal")
+                            if resultado_registro.espejo_horizontal
+                            else tr("mirror_summary_vertical")
+                            if resultado_registro.espejo_vertical
+                            else tr("mirror_summary_none")
+                        ),
+                        evidence=resultado_registro.evidencia,
                     )
                 else:
                     detalle_alineacion = tr(
@@ -3432,17 +3496,15 @@ class VentanaPrincipal(QMainWindow):
                         ),
                         confidence=confianza,
                     )
-
-            referencia_elegida = (
-                resultado_registro.referencia
-                if resultado_registro is not None
-                else referencias[0]
-            )
-            refinadas = refinar_posiciones_regiones(
-                referencia_elegida,
-                regiones,
-                instante,
-            )
+            # Las posiciones NOAA/HEK ya están en coordenadas heliográficas.
+            # No se refinan automáticamente contra la textura de la
+            # referencia: en H-alfa eso desplaza una AR hacia un filamento o
+            # una plage cercana y hace que la imagen anotada parezca errónea.
+            for region in regiones:
+                region.refinado_x = None
+                region.refinado_y = None
+                region.confianza_refinado = None
+            refinadas = 0
             self.ruta_referencia_catalogo = (
                 crear_referencia_anotada(
                     referencia_elegida,

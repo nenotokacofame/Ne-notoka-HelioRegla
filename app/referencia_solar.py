@@ -62,6 +62,8 @@ class ResultadoRegistro:
     puntuacion: float
     confianza: str
     referencia: ReferenciaSolar
+    evidencia: int = 0
+    separacion: float = 0.0
 
 
 class ErrorReferenciaSolar(RuntimeError):
@@ -439,6 +441,52 @@ def _rasgos(imagen):
     return normalizados, mascara
 
 
+def _rasgos_manchas(imagen):
+    """Extrae estructuras compactas para alinear discos de longitudes distintas.
+
+    La granulación y el contraste global cambian mucho entre visible, HMI y
+    H-alfa. Las manchas, en cambio, permanecen como estructuras compactas. Se
+    usa el contraste local absoluto para admitir tanto imágenes normales como
+    invertidas sin confundir el borde o el oscurecimiento del limbo.
+    """
+    imagen = ImageOps.autocontrast(imagen)
+    base = np.asarray(imagen, dtype=np.float32) / 255.0
+    suave = np.asarray(
+        imagen.filter(ImageFilter.GaussianBlur(radius=3.0)),
+        dtype=np.float32,
+    ) / 255.0
+    respuesta = np.abs(base - suave)
+
+    alto, ancho = respuesta.shape
+    yy, xx = np.indices(respuesta.shape)
+    centro_x = (ancho - 1) / 2
+    centro_y = (alto - 1) / 2
+    radio = min(ancho, alto) * 0.45
+    mascara = (
+        (xx - centro_x) ** 2 + (yy - centro_y) ** 2
+    ) <= radio**2
+    valores = respuesta[mascara]
+    if valores.size == 0:
+        return np.zeros_like(respuesta), mascara
+
+    # Elimina la textura débil y conserva los núcleos que distinguen una AR.
+    umbral = float(np.percentile(valores, 95.0))
+    techo = float(np.percentile(valores, 99.5))
+    respuesta = np.clip(
+        (respuesta - umbral) / max(techo - umbral, 1e-6),
+        0.0,
+        1.0,
+    )
+    respuesta[~mascara] = 0.0
+    respuesta = np.asarray(
+        Image.fromarray(
+            np.asarray(respuesta * 255, dtype=np.uint8)
+        ).filter(ImageFilter.GaussianBlur(radius=1.0)),
+        dtype=np.float32,
+    ) / 255.0
+    return respuesta, mascara
+
+
 def _transformar(imagen, rotacion, espejo_horizontal, espejo_vertical):
     resultado = imagen
     if espejo_horizontal:
@@ -479,7 +527,10 @@ def registrar_orientacion(
         centro_y,
         radio,
     )
-    rasgos_usuario, mascara = _rasgos(usuario)
+    # Para el registro automático usamos solo manchas/estructuras compactas.
+    # Comparar toda la textura hacía que una diferencia de longitud de onda
+    # pareciera una orientación distinta.
+    rasgos_usuario, mascara = _rasgos_manchas(usuario)
     candidatos = []
 
     for referencia in referencias:
@@ -487,6 +538,8 @@ def registrar_orientacion(
         for espejo_horizontal, espejo_vertical in (
             (False, False),
             (True, False),
+            (False, True),
+            (True, True),
         ):
             for rotacion in range(-180, 180, 10):
                 transformada = _transformar(
@@ -495,7 +548,7 @@ def registrar_orientacion(
                     espejo_horizontal,
                     espejo_vertical,
                 )
-                rasgos, _ = _rasgos(transformada)
+                rasgos, _ = _rasgos_manchas(transformada)
                 puntuacion = _correlacion(
                     rasgos_usuario,
                     rasgos,
@@ -524,7 +577,7 @@ def registrar_orientacion(
                 espejo_h,
                 espejo_v,
             )
-            rasgos, _ = _rasgos(transformada)
+            rasgos, _ = _rasgos_manchas(transformada)
             puntuacion = _correlacion(
                 rasgos_usuario,
                 rasgos,
@@ -542,9 +595,9 @@ def registrar_orientacion(
 
     refinados.sort(key=lambda valor: valor[0], reverse=True)
     puntuacion, referencia, rotacion, espejo_h, espejo_v = refinados[0]
-    if puntuacion >= 0.42:
+    if puntuacion >= 0.50:
         confianza = "alta"
-    elif puntuacion >= 0.24:
+    elif puntuacion >= 0.30:
         confianza = "media"
     else:
         confianza = "baja"
@@ -556,6 +609,285 @@ def registrar_orientacion(
         puntuacion=puntuacion,
         confianza=confianza,
         referencia=referencia,
+    )
+
+
+def registrar_orientacion_catalogo(
+    ruta_usuario,
+    centro_x,
+    centro_y,
+    radio,
+    regiones,
+    instante,
+    referencia,
+):
+    """Resuelve la orientación usando las posiciones NOAA/HEK.
+
+    En H-alfa las estructuras filamentosas y las plages pueden parecer muy
+    distintas entre dos observatorios. Por eso esta segunda ruta no compara
+    la textura con una referencia: transforma las coordenadas catalogadas de
+    cada AR y busca, dentro de una vecindad limitada, el contraste compacto de
+    la propia fotografía. Es una solución de placa guiada por catálogo y
+    funciona también con imágenes invertidas.
+    """
+    tamano = 512
+    disco = _disco_usuario(
+        ruta_usuario,
+        centro_x,
+        centro_y,
+        radio,
+        tamano=tamano,
+    )
+    imagen = ImageOps.autocontrast(disco)
+    base = np.asarray(imagen, dtype=np.float32) / 255.0
+    suave = np.asarray(
+        imagen.filter(ImageFilter.GaussianBlur(radius=5.0)),
+        dtype=np.float32,
+    ) / 255.0
+    respuesta = np.abs(base - suave)
+    yy, xx = np.indices(respuesta.shape)
+    centro = (tamano - 1) / 2
+    radio_mapa = tamano / 2.04
+    mascara = (xx - centro) ** 2 + (yy - centro) ** 2 <= (
+        radio_mapa * 0.96
+    ) ** 2
+    valores = respuesta[mascara]
+    if valores.size < 50:
+        return ResultadoRegistro(
+            rotacion=0.0,
+            espejo_horizontal=False,
+            espejo_vertical=False,
+            puntuacion=-1.0,
+            confianza="baja",
+            referencia=referencia,
+        )
+    umbral = float(np.percentile(valores, 95.0))
+    techo = float(np.percentile(valores, 99.5))
+    respuesta = np.clip(
+        (respuesta - umbral) / max(techo - umbral, 1e-6),
+        0.0,
+        1.0,
+    )
+    respuesta[~mascara] = 0.0
+    respuesta = np.asarray(
+        Image.fromarray(
+            np.asarray(respuesta * 255, dtype=np.uint8)
+        ).filter(ImageFilter.GaussianBlur(radius=1.0)),
+        dtype=np.float32,
+    ) / 255.0
+
+    controles = []
+    for region in regiones:
+        posicion = coordenadas_catalogo_normalizadas(
+            region,
+            instante,
+        )
+        if posicion is None:
+            continue
+        peso = math.sqrt(max(float(region.area or 1), 1.0))
+        controles.append((posicion[0], posicion[1], peso))
+    if len(controles) < 2:
+        return ResultadoRegistro(
+            rotacion=0.0,
+            espejo_horizontal=False,
+            espejo_vertical=False,
+            puntuacion=-1.0,
+            confianza="baja",
+            referencia=referencia,
+        )
+
+    # El ajuste manual del limbo puede tener unos píxeles de diferencia,
+    # especialmente cuando el disco está recortado por el borde superior.
+    # Probamos pequeños desplazamientos y escalas en el mapa normalizado;
+    # así la orientación no depende de que Hough haya elegido exactamente el
+    # mismo radio que el catálogo. No se altera el círculo del usuario: solo
+    # se usa esta tolerancia para resolver la placa.
+    ajustes_geometricos = (
+        (0.0, 0.0, 1.000),
+        (0.0, 0.0, 0.975),
+        (0.0, 0.0, 1.025),
+    )
+
+    def evaluar(
+        angulo,
+        espejo_horizontal,
+        espejo_vertical,
+        ajuste_x=0.0,
+        ajuste_y=0.0,
+        ajuste_radio=1.0,
+    ):
+        valores = []
+        pesos = []
+        centro_ajustado_x = centro + ajuste_x * radio_mapa
+        centro_ajustado_y = centro + ajuste_y * radio_mapa
+        radio_ajustado = radio_mapa * ajuste_radio
+        for x, y_solar, peso in controles:
+            dx = x
+            dy = -y_solar
+            if espejo_horizontal:
+                dx *= -1
+            if espejo_vertical:
+                dy *= -1
+            angulo_rad = math.radians(angulo)
+            esperado_x = (
+                math.cos(angulo_rad) * dx
+                - math.sin(angulo_rad) * dy
+            )
+            esperado_y = (
+                math.sin(angulo_rad) * dx
+                + math.cos(angulo_rad) * dy
+            )
+            px = centro_ajustado_x + esperado_x * radio_ajustado
+            py = centro_ajustado_y + esperado_y * radio_ajustado
+            if not (0 <= px < tamano and 0 <= py < tamano):
+                continue
+            # El SRS se publica a 00:00Z y la foto puede estar varias horas
+            # alejada de esa referencia. La rotación solar y una pequeña
+            # imprecisión del círculo justifican una ventana de ~10% del
+            # radio; no se debe saltar a otra región activa.
+            busqueda = max(10, min(20, radio_mapa * 0.065))
+            x0 = max(0, int(px - busqueda))
+            x1 = min(tamano, int(px + busqueda + 1))
+            y0 = max(0, int(py - busqueda))
+            y1 = min(tamano, int(py + busqueda + 1))
+            ventana = respuesta[y0:y1, x0:x1]
+            if ventana.size == 0:
+                continue
+            # Una AR puede ocupar solo una fracción pequeña de la ventana.
+            # El percentil 90 solía devolver cero y descartaba precisamente
+            # las manchas que sí estaban bajo la posición catalogada. Se
+            # pondera el pico compacto (p99.2) con el promedio de la cola
+            # superior; así una línea larga de filamento no domina por sí
+            # sola.
+            pico = float(np.percentile(ventana, 99.2))
+            cola = np.sort(ventana.reshape(-1))
+            cantidad_cola = max(3, int(cola.size * 0.01))
+            promedio_cola = float(np.mean(cola[-cantidad_cola:]))
+            valores.append(0.72 * pico + 0.28 * promedio_cola)
+            pesos.append(peso)
+        if not valores:
+            return -1.0, 0
+        valores = np.asarray(valores, dtype=np.float32)
+        pesos = np.asarray(pesos, dtype=np.float32)
+        fuertes = int(np.count_nonzero(valores >= 0.42))
+        puntuacion = float(np.average(valores, weights=pesos))
+        # La cantidad de coincidencias es más informativa que un promedio
+        # alto provocado por una sola plage brillante.
+        puntuacion += 0.12 * fuertes / max(len(controles), 1)
+        return puntuacion, fuertes
+
+    candidatos = []
+    for espejo_horizontal, espejo_vertical in (
+        (False, False),
+        (True, False),
+        (False, True),
+        (True, True),
+    ):
+        for ajuste_x, ajuste_y, ajuste_radio in ajustes_geometricos:
+            for angulo in range(-180, 180, 4):
+                puntuacion, fuertes = evaluar(
+                    angulo,
+                    espejo_horizontal,
+                    espejo_vertical,
+                    ajuste_x,
+                    ajuste_y,
+                    ajuste_radio,
+                )
+                candidatos.append(
+                    (
+                        puntuacion,
+                        fuertes,
+                        float(angulo),
+                        espejo_horizontal,
+                        espejo_vertical,
+                        ajuste_x,
+                        ajuste_y,
+                        ajuste_radio,
+                    )
+                )
+
+    candidatos.sort(
+        key=lambda valor: (valor[0], valor[1]),
+        reverse=True,
+    )
+    refinados = []
+    for candidato in candidatos[:8]:
+        (
+            _,
+            _,
+            angulo,
+            espejo_horizontal,
+            espejo_vertical,
+            ajuste_x,
+            ajuste_y,
+            ajuste_radio,
+        ) = candidato
+        for refinado in np.arange(angulo - 5, angulo + 5.1, 1.0):
+            refinado = ((float(refinado) + 180) % 360) - 180
+            puntuacion, fuertes = evaluar(
+                refinado,
+                espejo_horizontal,
+                espejo_vertical,
+                ajuste_x,
+                ajuste_y,
+                ajuste_radio,
+            )
+            refinados.append(
+                (
+                    puntuacion,
+                    fuertes,
+                    refinado,
+                    espejo_horizontal,
+                    espejo_vertical,
+                    ajuste_x,
+                    ajuste_y,
+                    ajuste_radio,
+                )
+            )
+    refinados.sort(
+        key=lambda valor: (valor[0], valor[1]),
+        reverse=True,
+    )
+    (
+        puntuacion,
+        fuertes,
+        angulo,
+        espejo_h,
+        espejo_v,
+        _ajuste_x,
+        _ajuste_y,
+        _ajuste_radio,
+    ) = refinados[0]
+    alternativas = [
+        valor
+        for valor in refinados[1:]
+        if (
+            valor[3] != espejo_h
+            or valor[4] != espejo_v
+            or abs(valor[2] - angulo) >= 12
+        )
+    ]
+    segundo = alternativas[0][0] if alternativas else -1.0
+    separacion = puntuacion - segundo
+    if puntuacion >= 0.50 and fuertes >= 3:
+        confianza = "alta"
+    elif (
+        puntuacion >= 0.24
+        and fuertes >= 2
+        and separacion >= 0.012
+    ):
+        confianza = "media"
+    else:
+        confianza = "baja"
+    return ResultadoRegistro(
+        rotacion=angulo,
+        espejo_horizontal=espejo_h,
+        espejo_vertical=espejo_v,
+        puntuacion=puntuacion,
+        confianza=confianza,
+        referencia=referencia,
+        evidencia=fuertes,
+        separacion=separacion,
     )
 
 

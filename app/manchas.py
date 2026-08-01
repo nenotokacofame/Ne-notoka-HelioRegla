@@ -16,6 +16,7 @@ class GrupoMancha(QGraphicsItemGroup):
         super().__init__()
         self.etiqueta = etiqueta
         self.cambio_registrado = False
+        self.redimensionando = False
         self.setCursor(Qt.SizeAllCursor)
         self.setFlag(QGraphicsItem.ItemIsMovable, True)
         self.setFlag(
@@ -25,7 +26,16 @@ class GrupoMancha(QGraphicsItemGroup):
         self.setAcceptedMouseButtons(
             Qt.LeftButton | Qt.RightButton
         )
+        self.setAcceptHoverEvents(True)
         self.setZValue(58)
+
+    def _sobre_control_tamano(self, posicion):
+        radio_x = self.etiqueta.ancho / 2
+        radio_y = self.etiqueta.alto / 2
+        return (
+            abs(posicion.x() - radio_x) <= 10
+            and abs(posicion.y() - radio_y) <= 10
+        )
 
     def mousePressEvent(self, event):
         if event.button() == Qt.RightButton:
@@ -35,11 +45,42 @@ class GrupoMancha(QGraphicsItemGroup):
             return
 
         if event.button() == Qt.LeftButton:
+            if self._sobre_control_tamano(event.pos()):
+                self.redimensionando = True
+                self.etiqueta.notificar_inicio_cambio()
+                event.accept()
+                return
             self.cambio_registrado = False
             self.etiqueta.notificar_inicio_cambio()
             self.cambio_registrado = True
 
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self.redimensionando and event.buttons() & Qt.LeftButton:
+            centro = self.etiqueta.grupo.pos()
+            posicion = event.scenePos()
+            self.etiqueta.establecer_tamano(
+                abs(posicion.x() - centro.x()) * 2,
+                abs(posicion.y() - centro.y()) * 2,
+            )
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if self.redimensionando and event.button() == Qt.LeftButton:
+            self.redimensionando = False
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
+
+    def hoverMoveEvent(self, event):
+        if self._sobre_control_tamano(event.pos()):
+            self.setCursor(Qt.SizeFDiagCursor)
+        else:
+            self.setCursor(Qt.SizeAllCursor)
+        super().hoverMoveEvent(event)
 
     def mouseDoubleClickEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -93,35 +134,11 @@ class ControlTamanoMancha(QGraphicsEllipseItem):
     def __init__(self, etiqueta):
         super().__init__(-6, -6, 12, 12)
         self.etiqueta = etiqueta
-        self.setAcceptedMouseButtons(Qt.LeftButton)
-        self.setAcceptHoverEvents(True)
-        self.setCursor(Qt.SizeFDiagCursor)
+        # El grupo padre procesa el arrastre para evitar que el marcador se
+        # mueva como una anotación completa. Este elemento solo es visual.
+        self.setAcceptedMouseButtons(Qt.NoButton)
+        self.setAcceptHoverEvents(False)
         self.setZValue(2)
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.etiqueta.notificar_inicio_cambio()
-            event.accept()
-            return
-        event.ignore()
-
-    def mouseMoveEvent(self, event):
-        if event.buttons() & Qt.LeftButton:
-            centro = self.etiqueta.grupo.pos()
-            posicion = event.scenePos()
-            self.etiqueta.establecer_tamano(
-                abs(posicion.x() - centro.x()) * 2,
-                abs(posicion.y() - centro.y()) * 2,
-            )
-            event.accept()
-            return
-        event.ignore()
-
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            event.accept()
-            return
-        event.ignore()
 
 
 class EtiquetaMancha:

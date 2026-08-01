@@ -1,5 +1,11 @@
 ﻿# Historial de cambios
 
+## Próxima 1.1.0
+
+- Corregido el arrastre del control de tamaño de las regiones activas: ahora
+  el grupo distingue el control de esquina del movimiento de la anotación y
+  modifica el ancho y el alto del óvalo correctamente.
+
 ## 1.0.0
 
 - Primera versión estable de distribución pública para Windows.

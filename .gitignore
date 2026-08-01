@@ -6,6 +6,5 @@ __pycache__/
 build_instalador/
 dist/
 dist_instalador/
-licencias_terceros/
 proyectos/*
 !proyectos/.gitkeep

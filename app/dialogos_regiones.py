@@ -97,6 +97,20 @@ class DialogoConsultaRegiones(QDialog):
         self.alinear_automaticamente.setEnabled(
             bool(puede_alinear)
         )
+
+        # La orientación manual debe tener prioridad explícita. Antes se
+        # podían marcar los espejos, pero la alineación automática seguía
+        # activa y reemplazaba esos valores al consultar el catálogo, dando
+        # la impresión de que las casillas no hacían nada.
+        self.rotacion.valueChanged.connect(
+            self._orientacion_manual_editada
+        )
+        self.espejo_horizontal.stateChanged.connect(
+            self._orientacion_manual_editada
+        )
+        self.espejo_vertical.stateChanged.connect(
+            self._orientacion_manual_editada
+        )
         self.fuente_referencia = QComboBox()
         for clave, texto in (
             ("automatica", tr("reference_source_auto")),
@@ -147,6 +161,10 @@ class DialogoConsultaRegiones(QDialog):
         botones.accepted.connect(self.accept)
         botones.rejected.connect(self.reject)
         principal.addWidget(botones)
+
+    def _orientacion_manual_editada(self, _valor=None):
+        if self.alinear_automaticamente.isChecked():
+            self.alinear_automaticamente.setChecked(False)
 
     def instante_utc(self):
         fecha = self.fecha_hora.date()

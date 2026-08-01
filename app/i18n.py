@@ -404,8 +404,9 @@ TEXTOS = {
         ),
         "automatic_alignment_applied": (
             "Alineación automática aplicada con {source}: rotación "
-            "{rotation:.1f}°, confianza {confidence}. Las regiones "
-            "continúan siendo movibles para cualquier ajuste fino."
+            "{rotation:.1f}°, {mirrors}, confianza {confidence} "
+            "({evidence} coincidencias). Las regiones continúan siendo "
+            "movibles para cualquier ajuste fino."
         ),
         "automatic_alignment_low": (
             "La coincidencia con {source} tuvo confianza {confidence}; "
@@ -422,6 +423,10 @@ TEXTOS = {
         "alignment_confidence_alta": "alta",
         "alignment_confidence_media": "media",
         "alignment_confidence_baja": "baja",
+        "mirror_summary_none": "sin espejo",
+        "mirror_summary_horizontal": "espejo horizontal",
+        "mirror_summary_vertical": "espejo vertical",
+        "mirror_summary_both": "ambos espejos",
         "catalog_error_title": "No se pudo consultar el catálogo",
         "catalog_error_text": (
             "Comprueba la conexión a Internet y la fecha de "
@@ -963,8 +968,9 @@ TEXTOS = {
         ),
         "automatic_alignment_applied": (
             "Automatic alignment applied using {source}: rotation "
-            "{rotation:.1f}°, {confidence} confidence. Regions remain "
-            "movable for fine adjustment."
+            "{rotation:.1f}°, {mirrors}, {confidence} confidence "
+            "({evidence} matches). Regions remain movable for fine "
+            "adjustment."
         ),
         "automatic_alignment_low": (
             "The match with {source} had {confidence} confidence; "
@@ -981,6 +987,10 @@ TEXTOS = {
         "alignment_confidence_alta": "high",
         "alignment_confidence_media": "medium",
         "alignment_confidence_baja": "low",
+        "mirror_summary_none": "no mirror",
+        "mirror_summary_horizontal": "horizontal mirror",
+        "mirror_summary_vertical": "vertical mirror",
+        "mirror_summary_both": "both mirrors",
         "catalog_error_title": "Could not query the catalogue",
         "catalog_error_text": (
             "Check the Internet connection and capture date.\n\n"

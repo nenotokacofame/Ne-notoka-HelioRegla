@@ -49,3 +49,11 @@ del programa.
 - [Guía de uso](docs/GUIA_DE_USO.md)
 - [Atajos y controles](docs/ATAJOS.md)
 - [Historial de cambios](CHANGELOG.md)
+- [Publicar en GitHub y verificar el instalador](docs/PUBLICAR_GITHUB.md)
+
+## Descargas
+
+El instalador oficial de Windows se publica en la sección **Releases** de
+GitHub junto con `SHA256SUMS.txt`. El código fuente, la guía y la licencia se
+mantienen en este repositorio; el instalador no se incluye dentro del historial
+para evitar descargas pesadas y conservar una versión verificable.

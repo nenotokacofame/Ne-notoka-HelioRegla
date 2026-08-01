@@ -598,8 +598,13 @@ def tamano_region_en_imagen(region, radio):
         )
         ancho = max(ancho, por_area)
 
-    ancho = min(max(ancho, radio * 0.035), radio * 0.35)
-    alto = max(ancho * 0.68, radio * 0.025)
+    # Las regiones pequeñas del SRS suelen tener una extensión de apenas
+    # 2° aunque en la fotografía se vean varios núcleos. El mínimo anterior
+    # producía óvalos demasiado pequeños para seleccionarlos y comparar la
+    # zona activa. Se conserva el tamaño catalogado cuando es mayor, pero se
+    # da un área visual mínima de 5.5 % del radio del disco.
+    ancho = min(max(ancho, radio * 0.055), radio * 0.35)
+    alto = max(ancho * 0.68, radio * 0.035)
     return ancho, alto
 
 
