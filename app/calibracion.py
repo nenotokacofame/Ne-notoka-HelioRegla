@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QLabel,
+    QMessageBox,
     QPushButton,
     QSpinBox,
     QVBoxLayout,
@@ -41,6 +42,13 @@ class ResultadoCalibracion:
     distancia_sol_km: float
     metodo: str
     descripcion: str
+    escala_limbo: float | None = None
+    diferencia_pct: float | None = None
+    usar_escala_equipo: bool = True
+
+
+UMBRAL_REVISION_PORCENTAJE = 5.0
+UMBRAL_CRITICO_PORCENTAJE = 15.0
 
 
 def _numero(valor):
@@ -257,6 +265,7 @@ class DialogoCalibracion(QDialog):
         self.ruta_imagen = ruta_imagen
         self.escala_limbo = escala_limbo
         self.resultado = None
+        self.usar_escala_equipo = True
         self.metadatos = leer_metadatos(ruta_imagen)
         self.ajustes = QSettings(
             "Ne-notoka Cofame",
@@ -472,9 +481,10 @@ class DialogoCalibracion(QDialog):
         )
 
         comparacion = ""
+        diferencia_pct = None
 
         if self.escala_limbo:
-            diferencia = (
+            diferencia_pct = (
                 (km_px - self.escala_limbo)
                 / self.escala_limbo
                 * 100
@@ -482,8 +492,10 @@ class DialogoCalibracion(QDialog):
             comparacion = (
                 f"\n{tr('limb_scale')}: "
                 f"{self.escala_limbo:,.2f} km/px"
-                f"\n{tr('difference')}: {diferencia:+.2f}%"
+                f"\n{tr('difference')}: {diferencia_pct:+.2f}%"
             )
+            if abs(diferencia_pct) > UMBRAL_REVISION_PORCENTAJE:
+                comparacion += f"\n{tr('calibration_review')}"
 
         self.resultado = ResultadoCalibracion(
             km_por_pixel=km_px,
@@ -491,6 +503,9 @@ class DialogoCalibracion(QDialog):
             distancia_sol_km=distancia,
             metodo=tr("optical_data"),
             descripcion=descripcion,
+            escala_limbo=self.escala_limbo,
+            diferencia_pct=diferencia_pct,
+            usar_escala_equipo=self.usar_escala_equipo,
         )
 
         self.resultados.setText(
@@ -500,10 +515,79 @@ class DialogoCalibracion(QDialog):
             f"{tr('physical_scale')}: {km_px:,.2f} km/px"
             f"{comparacion}"
         )
+        self.actualizar_estilo_resultados()
+
+    def actualizar_estilo_resultados(self):
+        diferencia = (
+            self.resultado.diferencia_pct
+            if self.resultado is not None
+            else None
+        )
+        if diferencia is None:
+            color = "#AFC7D3"
+            fondo = "#F0F7FA"
+        elif abs(diferencia) > UMBRAL_CRITICO_PORCENTAJE:
+            color = "#B42318"
+            fondo = "#FDECEC"
+        elif abs(diferencia) > UMBRAL_REVISION_PORCENTAJE:
+            color = "#A15C00"
+            fondo = "#FFF4CF"
+        else:
+            color = "#2E7D32"
+            fondo = "#EEF8EF"
+
+        self.resultados.setStyleSheet(
+            "padding: 12px; border: 1px solid "
+            f"{color}; border-left: 4px solid {color}; "
+            f"border-radius: 5px; background-color: {fondo};"
+        )
 
     def aceptar(self):
         self.calcular()
 
         if self.resultado is not None:
+            diferencia = self.resultado.diferencia_pct
+            if (
+                diferencia is not None
+                and abs(diferencia) > UMBRAL_CRITICO_PORCENTAJE
+            ):
+                mensaje = QMessageBox(self)
+                mensaje.setIcon(QMessageBox.Warning)
+                mensaje.setWindowTitle(
+                    tr("calibration_mismatch_title")
+                )
+                mensaje.setText(
+                    tr(
+                        "calibration_mismatch_text",
+                        difference=f"{diferencia:+.1f}",
+                        limb=f"{self.escala_limbo:,.1f}",
+                        equipment=(
+                            f"{self.resultado.km_por_pixel:,.1f}"
+                        ),
+                    )
+                )
+                boton_equipo = mensaje.addButton(
+                    tr("calibration_use_equipment"),
+                    QMessageBox.AcceptRole,
+                )
+                boton_limbo = mensaje.addButton(
+                    tr("calibration_use_limb"),
+                    QMessageBox.DestructiveRole,
+                )
+                boton_cancelar = mensaje.addButton(
+                    tr("calibration_keep_editing"),
+                    QMessageBox.RejectRole,
+                )
+                mensaje.exec()
+
+                if mensaje.clickedButton() is boton_cancelar:
+                    return
+                self.usar_escala_equipo = (
+                    mensaje.clickedButton() is boton_equipo
+                )
+                self.resultado.usar_escala_equipo = (
+                    self.usar_escala_equipo
+                )
+
             self.guardar_datos_equipo()
             self.accept()

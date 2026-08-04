@@ -126,9 +126,17 @@ class CirculoLimbo(QGraphicsEllipseItem):
 
     def establecer_estilo(self, color, grosor):
         self.color_linea = color
-        self.grosor_linea = grosor
+        self.grosor_linea = max(0, int(grosor))
 
-        lapiz = QPen(QColor(color), grosor)
+        # En Qt un QPen de ancho 0 sigue dibujando una línea cosmética de
+        # un píxel. Para que "0 px" signifique realmente ocultar el limbo
+        # usamos NoPen y dejamos los manejadores disponibles mientras se
+        # está editando el círculo.
+        if self.grosor_linea <= 0:
+            self.setPen(QPen(Qt.NoPen))
+            return
+
+        lapiz = QPen(QColor(color), self.grosor_linea)
         lapiz.setCosmetic(True)
         self.setPen(lapiz)
 

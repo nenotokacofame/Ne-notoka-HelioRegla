@@ -1,5 +1,5 @@
 AVISOS DE COMPONENTES DE TERCEROS / THIRD-PARTY NOTICES
-Ne-notoka HelioRegla 1.0.0
+Ne-notoka HelioRegla 1.2.0
 
 Ne-notoka HelioRegla incluye bibliotecas de terceros que no están cubiertas
 por la Licencia de uso gratuito Ne-notoka HelioRegla 1.0. Cada biblioteca se

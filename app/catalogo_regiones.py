@@ -19,7 +19,7 @@ SRS_ARCHIVO = (
 )
 SRS_ACTUAL = "https://services.swpc.noaa.gov/text/srs.txt"
 HEK_EVENTOS = "https://api.helioviewer.org/v2/events/"
-AGENTE = "Ne-notoka-HelioRegla/1.0.0"
+AGENTE = "Ne-notoka-HelioRegla/1.2.0"
 
 
 class ErrorCatalogoRegiones(RuntimeError):
@@ -564,6 +564,9 @@ def posicion_en_imagen(
     rotacion=0.0,
     espejo_horizontal=False,
     espejo_vertical=False,
+    desplazamiento_x=0.0,
+    desplazamiento_y=0.0,
+    escala_mapa=1.0,
 ):
     normalizadas = coordenadas_normalizadas(region, instante)
     if normalizadas is None:
@@ -581,8 +584,10 @@ def posicion_en_imagen(
     angulo = math.radians(rotacion)
     coseno = math.cos(angulo)
     seno = math.sin(angulo)
-    x_rotado = coseno * dx - seno * dy
-    y_rotado = seno * dx + coseno * dy
+    x_rotado = (coseno * dx - seno * dy) * float(escala_mapa)
+    y_rotado = (seno * dx + coseno * dy) * float(escala_mapa)
+    x_rotado += float(desplazamiento_x) * radio
+    y_rotado += float(desplazamiento_y) * radio
     return centro_x + x_rotado, centro_y + y_rotado
 
 

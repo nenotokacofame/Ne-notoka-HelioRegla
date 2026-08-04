@@ -73,6 +73,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QProgressDialog,
     QPushButton,
     QComboBox,
     QScrollArea,
@@ -103,7 +104,7 @@ def ruta_base_aplicacion():
 RUTA_PROYECTO = ruta_base_aplicacion()
 RUTA_LOGO = RUTA_PROYECTO / "assets" / "logo_ne_notoka.png"
 RUTA_ICONO = RUTA_PROYECTO / "assets" / "icono_ne_notoka.ico"
-VERSION = "1.0.0"
+VERSION = "1.2.0"
 
 
 class VisorSolar(QGraphicsView):
@@ -659,6 +660,7 @@ class VentanaPrincipal(QMainWindow):
         self.incertidumbre_radio_px = None
         self.puntos_limbo = None
         self.escala_equipo_km = None
+        self.usar_escala_equipo = True
         self.descripcion_calibracion = None
         self.muestras_circulos = []
         self.regla_solar = None
@@ -752,6 +754,21 @@ class VentanaPrincipal(QMainWindow):
             "catalogo/espejo_vertical",
             False,
             type=bool,
+        )
+        self.ajuste_catalogo_x = self.ajustes.value(
+            "catalogo/desplazamiento_x",
+            0.0,
+            type=float,
+        )
+        self.ajuste_catalogo_y = self.ajustes.value(
+            "catalogo/desplazamiento_y",
+            0.0,
+            type=float,
+        )
+        self.escala_mapa_catalogo = self.ajustes.value(
+            "catalogo/escala_mapa",
+            1.0,
+            type=float,
         )
         self.mostrar_conteo_manchas = self.ajustes.value(
             "catalogo/mostrar_conteo",
@@ -871,6 +888,14 @@ class VentanaPrincipal(QMainWindow):
         self.boton_exportar.setObjectName("botonSecundario")
         self.boton_exportar.clicked.connect(
             self.exportar_imagen_anotada
+        )
+
+        self.boton_procesar_lote = QPushButton(
+            "Procesar lote"
+        )
+        self.boton_procesar_lote.setObjectName("botonSecundario")
+        self.boton_procesar_lote.clicked.connect(
+            self.procesar_lote
         )
 
         self.boton_abrir_proyecto = QPushButton(
@@ -1127,14 +1152,14 @@ class VentanaPrincipal(QMainWindow):
 
         self.selector_grosor = QComboBox()
 
-        for grosor in range(1, 11):
+        for grosor in range(0, 11):
             self.selector_grosor.addItem(
                 f"{grosor} px",
                 grosor,
             )
 
         self.selector_grosor.setCurrentIndex(
-            max(0, min(9, self.grosor_limbo - 1))
+            max(0, min(10, self.grosor_limbo))
         )
         self.selector_grosor.setToolTip(
             "Grosor del contorno del limbo"
@@ -1146,6 +1171,13 @@ class VentanaPrincipal(QMainWindow):
         self.etiqueta_medicion = QLabel("Calibración pendiente")
         self.etiqueta_medicion.setWordWrap(True)
         self.etiqueta_medicion.setObjectName("medicion")
+
+        self.etiqueta_advertencia_calibracion = QLabel()
+        self.etiqueta_advertencia_calibracion.setWordWrap(True)
+        self.etiqueta_advertencia_calibracion.setObjectName(
+            "calibracionAdvertencia"
+        )
+        self.etiqueta_advertencia_calibracion.setVisible(False)
 
         self.etiqueta_archivo = QLabel("Ninguna imagen cargada")
         self.etiqueta_archivo.setWordWrap(True)
@@ -1172,6 +1204,7 @@ class VentanaPrincipal(QMainWindow):
         panel_layout.addSpacing(8)
         panel_layout.addWidget(self.boton_abrir)
         panel_layout.addWidget(self.boton_exportar)
+        panel_layout.addWidget(self.boton_procesar_lote)
         panel_layout.addWidget(self.boton_abrir_proyecto)
         panel_layout.addWidget(self.boton_guardar_proyecto)
         panel_layout.addWidget(self.seccion_calibracion)
@@ -1239,6 +1272,9 @@ class VentanaPrincipal(QMainWindow):
 
         panel_layout.addWidget(self.etiqueta_archivo)
         panel_layout.addWidget(self.etiqueta_medicion)
+        panel_layout.addWidget(
+            self.etiqueta_advertencia_calibracion
+        )
         panel_layout.addStretch()
         panel_layout.addWidget(self.etiqueta_ayuda)
 
@@ -1302,6 +1338,16 @@ class VentanaPrincipal(QMainWindow):
             self.exportar_imagen_anotada
         )
         barra.addAction(self.accion_exportar)
+
+        self.accion_procesar_lote = QAction(
+            "Procesar lote",
+            self,
+        )
+        self.accion_procesar_lote.setShortcut("Ctrl+Shift+B")
+        self.accion_procesar_lote.triggered.connect(
+            self.procesar_lote
+        )
+        barra.addAction(self.accion_procesar_lote)
 
         self.accion_guardar_proyecto = QAction(
             "Guardar proyecto",
@@ -1665,6 +1711,7 @@ class VentanaPrincipal(QMainWindow):
         self.descripcion_interfaz.setText(tr("description"))
         self.boton_abrir.setText(tr("open_image"))
         self.boton_exportar.setText(tr("export_image"))
+        self.boton_procesar_lote.setText(tr("batch_process"))
         self.boton_abrir_proyecto.setText(tr("open_project"))
         self.boton_guardar_proyecto.setText(
             tr("save_project")
@@ -1725,9 +1772,11 @@ class VentanaPrincipal(QMainWindow):
             self.etiqueta_medicion.setText(
                 tr("pending_calibration")
             )
+        self.actualizar_advertencia_calibracion()
 
         self.accion_abrir.setText(tr("open"))
         self.accion_exportar.setText(tr("export"))
+        self.accion_procesar_lote.setText(tr("batch_process_action"))
         self.accion_guardar_proyecto.setText(
             tr("save_project")
         )
@@ -1827,6 +1876,13 @@ class VentanaPrincipal(QMainWindow):
                 tr("line_px", value=valor),
             )
 
+        for indice in range(self.selector_grosor.count()):
+            valor = self.selector_grosor.itemData(indice)
+            self.selector_grosor.setItemText(
+                indice,
+                tr("line_px", value=valor),
+            )
+
         for selector in (
             self.selector_tamano_regla,
             self.selector_tamano_anotaciones,
@@ -1871,48 +1927,21 @@ class VentanaPrincipal(QMainWindow):
         if ruta:
             self.visor.cargar_imagen(ruta)
 
-    def exportar_imagen_anotada(self):
+    def _renderizar_escena_anotada(self, pixmap=None):
+        """Renderiza la fotografía y las anotaciones sin controles.
+
+        ``pixmap`` permite reutilizar las mismas posiciones vectoriales con
+        otra fotografía del mismo tamaño. La imagen del visor se restaura
+        antes de devolver el resultado, por lo que el procesamiento por lotes
+        no altera el proyecto ni la fotografía plantilla.
+        """
         if self.visor.elemento_imagen is None:
-            QMessageBox.information(
-                self,
-                tr("first_open_image"),
-                tr("need_image_export"),
-            )
-            return
+            return None
 
-        archivo_original = Path(self.visor.ruta_imagen)
-        ultima_carpeta = self.ajustes.value(
-            "exportacion/ultima_carpeta",
-            str(archivo_original.parent),
-            type=str,
-        )
-        nombre_sugerido = (
-            f"{archivo_original.stem}_anotada.png"
-        )
-        ruta_sugerida = str(
-            Path(ultima_carpeta) / nombre_sugerido
-        )
-
-        ruta, filtro = QFileDialog.getSaveFileName(
-            self,
-            tr("export_title"),
-            ruta_sugerida,
-            "PNG (*.png);;JPEG (*.jpg *.jpeg);;"
-            "TIFF (*.tif *.tiff)",
-        )
-
-        if not ruta:
-            return
-
-        destino = Path(ruta)
-
-        if not destino.suffix:
-            if "JPEG" in filtro:
-                destino = destino.with_suffix(".jpg")
-            elif "TIFF" in filtro:
-                destino = destino.with_suffix(".tif")
-            else:
-                destino = destino.with_suffix(".png")
+        elemento_imagen = self.visor.elemento_imagen
+        pixmap_original = elemento_imagen.pixmap()
+        if pixmap is not None:
+            elemento_imagen.setPixmap(pixmap)
 
         elementos_temporales = []
 
@@ -1946,10 +1975,10 @@ class VentanaPrincipal(QMainWindow):
 
         ocultar(self.visor.previsualizacion_parcial)
 
-        pixmap = self.visor.elemento_imagen.pixmap()
+        pixmap_render = elemento_imagen.pixmap()
         imagen = QImage(
-            pixmap.width(),
-            pixmap.height(),
+            pixmap_render.width(),
+            pixmap_render.height(),
             QImage.Format_ARGB32,
         )
         imagen.fill(Qt.transparent)
@@ -1961,25 +1990,68 @@ class VentanaPrincipal(QMainWindow):
         )
 
         try:
-            rectangulo = (
-                self.visor.elemento_imagen.boundingRect()
-            )
             self.visor.escena.render(
                 pintor,
                 QRectF(0, 0, imagen.width(), imagen.height()),
-                rectangulo,
+                elemento_imagen.boundingRect(),
                 Qt.IgnoreAspectRatio,
             )
         finally:
             pintor.end()
-
             for elemento, era_visible in elementos_temporales:
                 elemento.setVisible(era_visible)
+            if pixmap is not None:
+                elemento_imagen.setPixmap(pixmap_original)
 
+        return imagen
+
+    def _guardar_render(self, imagen, destino):
         sufijo = destino.suffix.lower()
         calidad = 95 if sufijo in {".jpg", ".jpeg"} else -1
+        return imagen.save(str(destino), quality=calidad)
 
-        if not imagen.save(str(destino), quality=calidad):
+    def exportar_imagen_anotada(self):
+        if self.visor.elemento_imagen is None:
+            QMessageBox.information(
+                self,
+                tr("first_open_image"),
+                tr("need_image_export"),
+            )
+            return
+
+        archivo_original = Path(self.visor.ruta_imagen)
+        ultima_carpeta = self.ajustes.value(
+            "exportacion/ultima_carpeta",
+            str(archivo_original.parent),
+            type=str,
+        )
+        ruta_sugerida = str(
+            Path(ultima_carpeta)
+            / f"{archivo_original.stem}_anotada.png"
+        )
+
+        ruta, filtro = QFileDialog.getSaveFileName(
+            self,
+            tr("export_title"),
+            ruta_sugerida,
+            "PNG (*.png);;JPEG (*.jpg *.jpeg);;"
+            "TIFF (*.tif *.tiff)",
+        )
+
+        if not ruta:
+            return
+
+        destino = Path(ruta)
+        if not destino.suffix:
+            if "JPEG" in filtro:
+                destino = destino.with_suffix(".jpg")
+            elif "TIFF" in filtro:
+                destino = destino.with_suffix(".tif")
+            else:
+                destino = destino.with_suffix(".png")
+
+        imagen = self._renderizar_escena_anotada()
+        if imagen is None or not self._guardar_render(imagen, destino):
             QMessageBox.warning(
                 self,
                 tr("export_failed"),
@@ -2002,6 +2074,164 @@ class VentanaPrincipal(QMainWindow):
                 width=imagen.width(),
                 height=imagen.height(),
                 path=destino,
+            ),
+        )
+
+    def procesar_lote(self):
+        """Aplica las anotaciones del fotograma actual a varias imágenes."""
+        if self.visor.elemento_imagen is None:
+            QMessageBox.information(
+                self,
+                tr("first_open_image"),
+                tr("need_image_batch"),
+            )
+            return
+
+        if (
+            self.filamento_en_curso is not None
+            or self.visor.modo_limbo_parcial
+        ):
+            QMessageBox.information(
+                self,
+                tr("finish_editing"),
+                tr("finish_batch_editing"),
+            )
+            return
+
+        archivo_original = Path(self.visor.ruta_imagen)
+        ultima_carpeta = self.ajustes.value(
+            "lotes/ultima_carpeta",
+            str(archivo_original.parent),
+            type=str,
+        )
+        rutas, _ = QFileDialog.getOpenFileNames(
+            self,
+            tr("batch_select_title"),
+            ultima_carpeta,
+            tr("image_filter"),
+        )
+        if not rutas:
+            return
+
+        carpeta_salida = QFileDialog.getExistingDirectory(
+            self,
+            tr("batch_output_title"),
+            self.ajustes.value(
+                "lotes/ultima_salida",
+                str(archivo_original.parent),
+                type=str,
+            ),
+        )
+        if not carpeta_salida:
+            return
+
+        pixmap_plantilla = self.visor.elemento_imagen.pixmap()
+        tamano_plantilla = pixmap_plantilla.size()
+        validas = []
+        incompatibles = []
+        for ruta in rutas:
+            pixmap = QPixmap(ruta)
+            if pixmap.isNull():
+                incompatibles.append(Path(ruta).name)
+            elif pixmap.size() != tamano_plantilla:
+                incompatibles.append(Path(ruta).name)
+            else:
+                validas.append((Path(ruta), pixmap))
+
+        if not validas:
+            QMessageBox.warning(
+                self,
+                tr("batch_no_compatible"),
+                tr(
+                    "batch_no_compatible_text",
+                    width=tamano_plantilla.width(),
+                    height=tamano_plantilla.height(),
+                ),
+            )
+            return
+
+        respuesta = QMessageBox.question(
+            self,
+            tr("batch_confirm_title"),
+            tr(
+                "batch_confirm_text",
+                count=len(validas),
+                width=tamano_plantilla.width(),
+                height=tamano_plantilla.height(),
+                path=carpeta_salida,
+            ),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        if respuesta != QMessageBox.Yes:
+            return
+
+        progreso = QProgressDialog(
+            tr("batch_progress"),
+            tr("cancel"),
+            0,
+            len(validas),
+            self,
+        )
+        progreso.setWindowTitle(tr("batch_title"))
+        progreso.setWindowModality(Qt.WindowModal)
+        progreso.setMinimumDuration(0)
+        progreso.show()
+
+        guardadas = []
+        fallidas = []
+        cancelado = False
+        carpeta = Path(carpeta_salida)
+        for indice, (ruta, pixmap) in enumerate(validas, start=1):
+            if progreso.wasCanceled():
+                cancelado = True
+                break
+
+            progreso.setValue(indice - 1)
+            progreso.setLabelText(
+                tr("batch_processing", name=ruta.name)
+            )
+            QApplication.processEvents()
+
+            destino = carpeta / f"{ruta.stem}_anotada.png"
+            contador = 2
+            while destino.exists():
+                destino = carpeta / (
+                    f"{ruta.stem}_anotada_{contador}.png"
+                )
+                contador += 1
+
+            imagen = self._renderizar_escena_anotada(pixmap)
+            if imagen is not None and self._guardar_render(
+                imagen,
+                destino,
+            ):
+                guardadas.append(destino)
+            else:
+                fallidas.append(ruta.name)
+
+        progreso.setValue(len(validas) if not cancelado else len(guardadas))
+        progreso.close()
+
+        self.ajustes.setValue("lotes/ultima_carpeta", str(Path(rutas[0]).parent))
+        self.ajustes.setValue("lotes/ultima_salida", str(carpeta))
+        self.statusBar().showMessage(
+            tr("batch_done_status", count=len(guardadas))
+        )
+
+        QMessageBox.information(
+            self,
+            tr("batch_done_title"),
+            tr(
+                "batch_done_text",
+                count=len(guardadas),
+                skipped=len(incompatibles) + len(fallidas),
+                cancelled=(
+                    tr("batch_yes")
+                    if cancelado
+                    else tr("batch_no")
+                ),
+                path=carpeta,
             ),
         )
 
@@ -2033,6 +2263,7 @@ class VentanaPrincipal(QMainWindow):
             "calibracion": {
                 "km_por_pixel": self.escala_equipo_km,
                 "descripcion": self.descripcion_calibracion,
+                "usar_escala_equipo": self.usar_escala_equipo,
             },
             "limbo": datos_circulo,
             "protuberancias": [
@@ -2061,6 +2292,9 @@ class VentanaPrincipal(QMainWindow):
                 "espejo_vertical": (
                     self.espejo_vertical_catalogo
                 ),
+                "desplazamiento_x": self.ajuste_catalogo_x,
+                "desplazamiento_y": self.ajuste_catalogo_y,
+                "escala_mapa": self.escala_mapa_catalogo,
                 "mostrar_conteo": self.mostrar_conteo_manchas,
                 "fuente_alineacion": (
                     self.fuente_referencia_catalogo
@@ -2252,6 +2486,9 @@ class VentanaPrincipal(QMainWindow):
             self.descripcion_calibracion = calibracion.get(
                 "descripcion"
             )
+            self.usar_escala_equipo = bool(
+                calibracion.get("usar_escala_equipo", True)
+            )
 
             catalogo = datos.get("catalogo_regiones", {})
             self.rotacion_catalogo = float(
@@ -2270,6 +2507,24 @@ class VentanaPrincipal(QMainWindow):
                 catalogo.get(
                     "espejo_vertical",
                     self.espejo_vertical_catalogo,
+                )
+            )
+            self.ajuste_catalogo_x = float(
+                catalogo.get(
+                    "desplazamiento_x",
+                    self.ajuste_catalogo_x,
+                )
+            )
+            self.ajuste_catalogo_y = float(
+                catalogo.get(
+                    "desplazamiento_y",
+                    self.ajuste_catalogo_y,
+                )
+            )
+            self.escala_mapa_catalogo = float(
+                catalogo.get(
+                    "escala_mapa",
+                    self.escala_mapa_catalogo,
                 )
             )
             self.mostrar_conteo_manchas = bool(
@@ -2536,12 +2791,20 @@ class VentanaPrincipal(QMainWindow):
                     circulo.radio,
                 )
             elif self.escala_equipo_km is not None:
+                fuente = (
+                    tr("active_scale_equipment")
+                    if self.usar_escala_equipo
+                    else tr("active_scale_limb")
+                )
                 self.etiqueta_medicion.setText(
                     f"{tr('recovered_calibration')}\n"
                     f"{self.descripcion_calibracion or ''}\n"
                     f"{tr('active_physical_scale')}: "
-                    f"{self.escala_equipo_km:,.2f} km/px"
+                    f"{(self._escala_activa() or self.escala_equipo_km):,.2f} km/px\n"
+                    f"{tr('calibration_source')}: {fuente}"
                 )
+
+            self.actualizar_advertencia_calibracion()
 
             self.historial_estados.clear()
             self.ruta_proyecto_actual = ruta_proyecto
@@ -3145,7 +3408,10 @@ class VentanaPrincipal(QMainWindow):
         escala_limbo = 1_391_400 / (circulo.radio * 2)
         escala = (
             self.escala_equipo_km
-            if self.escala_equipo_km is not None
+            if (
+                self.escala_equipo_km is not None
+                and self.usar_escala_equipo
+            )
             else escala_limbo
         )
 
@@ -3309,6 +3575,11 @@ class VentanaPrincipal(QMainWindow):
         self.espejo_vertical_catalogo = (
             dialogo.espejo_vertical.isChecked()
         )
+        # Una consulta nueva parte de la placa nominal. Si la alineación
+        # automática encuentra una corrección global, se sustituye abajo.
+        self.ajuste_catalogo_x = 0.0
+        self.ajuste_catalogo_y = 0.0
+        self.escala_mapa_catalogo = 1.0
         self.mostrar_conteo_manchas = (
             dialogo.mostrar_manchas.isChecked()
         )
@@ -3467,6 +3738,15 @@ class VentanaPrincipal(QMainWindow):
                     self.espejo_vertical_catalogo = (
                         resultado_registro.espejo_vertical
                     )
+                    self.ajuste_catalogo_x = (
+                        resultado_registro.desplazamiento_x
+                    )
+                    self.ajuste_catalogo_y = (
+                        resultado_registro.desplazamiento_y
+                    )
+                    self.escala_mapa_catalogo = (
+                        resultado_registro.escala_mapa
+                    )
                     detalle_alineacion = tr(
                         "automatic_alignment_applied",
                         source=(
@@ -3552,6 +3832,18 @@ class VentanaPrincipal(QMainWindow):
             "catalogo/espejo_vertical",
             self.espejo_vertical_catalogo,
         )
+        self.ajustes.setValue(
+            "catalogo/desplazamiento_x",
+            self.ajuste_catalogo_x,
+        )
+        self.ajustes.setValue(
+            "catalogo/desplazamiento_y",
+            self.ajuste_catalogo_y,
+        )
+        self.ajustes.setValue(
+            "catalogo/escala_mapa",
+            self.escala_mapa_catalogo,
+        )
 
         resultados = DialogoResultadosRegiones(
             regiones,
@@ -3605,6 +3897,9 @@ class VentanaPrincipal(QMainWindow):
                     espejo_vertical=(
                         self.espejo_vertical_catalogo
                     ),
+                    desplazamiento_x=self.ajuste_catalogo_x,
+                    desplazamiento_y=self.ajuste_catalogo_y,
+                    escala_mapa=self.escala_mapa_catalogo,
                 )
                 if posicion is None:
                     fuera += 1
@@ -3895,7 +4190,10 @@ class VentanaPrincipal(QMainWindow):
         escala_limbo = 1_391_400 / (circulo.radio * 2)
         escala = (
             self.escala_equipo_km
-            if self.escala_equipo_km is not None
+            if (
+                self.escala_equipo_km is not None
+                and self.usar_escala_equipo
+            )
             else escala_limbo
         )
 
@@ -3943,10 +4241,68 @@ class VentanaPrincipal(QMainWindow):
             tr("filament_instructions")
         )
 
+    def obtener_diferencia_calibracion(self):
+        circulo = self.visor.circulo_limbo
+        if circulo is None or self.escala_equipo_km is None:
+            return None
+
+        escala_limbo = 1_391_400 / (circulo.radio * 2)
+        diferencia = (
+            (self.escala_equipo_km - escala_limbo)
+            / escala_limbo
+            * 100
+        )
+        return escala_limbo, diferencia
+
+    def actualizar_advertencia_calibracion(self):
+        datos = self.obtener_diferencia_calibracion()
+        etiqueta = self.etiqueta_advertencia_calibracion
+
+        if datos is None:
+            etiqueta.clear()
+            etiqueta.setVisible(False)
+            return
+
+        escala_limbo, diferencia = datos
+        if abs(diferencia) <= 5.0:
+            etiqueta.clear()
+            etiqueta.setVisible(False)
+            return
+
+        valores = {
+            "difference": f"{diferencia:+.1f}%",
+            "limb": f"{escala_limbo:,.1f}",
+            "equipment": f"{self.escala_equipo_km:,.1f}",
+        }
+        critica = abs(diferencia) > 15.0
+        etiqueta.setText(
+            tr(
+                "calibration_panel_critical"
+                if critica
+                else "calibration_panel_warning",
+                **valores,
+            )
+        )
+        if critica:
+            color = "#B42318"
+            fondo = "#FDECEC"
+        else:
+            color = "#A15C00"
+            fondo = "#FFF4CF"
+        etiqueta.setStyleSheet(
+            "padding: 8px; border: 1px solid "
+            f"{color}; border-left: 4px solid {color}; "
+            f"border-radius: 6px; background-color: {fondo};"
+        )
+        etiqueta.setVisible(True)
+
     def _escala_activa(self):
         circulo = self.visor.circulo_limbo
 
-        if self.escala_equipo_km is not None:
+        if (
+            self.escala_equipo_km is not None
+            and self.usar_escala_equipo
+        ):
             return self.escala_equipo_km
 
         if circulo is not None:
@@ -4450,6 +4806,7 @@ class VentanaPrincipal(QMainWindow):
 
         resultado = dialogo.resultado
         self.escala_equipo_km = resultado.km_por_pixel
+        self.usar_escala_equipo = resultado.usar_escala_equipo
         self.descripcion_calibracion = resultado.descripcion
 
         self.etiqueta_medicion.setText(
@@ -4458,7 +4815,9 @@ class VentanaPrincipal(QMainWindow):
             f"{tr('angular_scale')}: "
             f"{resultado.arcsec_por_pixel:.5f} ″/px\n"
             f"{tr('active_physical_scale')}: "
-            f"{resultado.km_por_pixel:,.2f} km/px"
+            f"{self._escala_activa() or resultado.km_por_pixel:,.2f} km/px\n"
+            f"{tr('calibration_source')}: "
+            f"{tr('active_scale_equipment' if self.usar_escala_equipo else 'active_scale_limb')}"
         )
         self.statusBar().showMessage(
             "Calibración óptica aplicada: "
@@ -4474,21 +4833,25 @@ class VentanaPrincipal(QMainWindow):
                 circulo.radio,
             )
 
-        for medicion in self.mediciones_filamentos:
-            medicion.km_por_pixel = self.escala_equipo_km
-            medicion.recalcular()
+        if circulo is None:
+            escala_activa = self._escala_activa()
+            if escala_activa is not None:
+                for medicion in self.mediciones_filamentos:
+                    medicion.km_por_pixel = escala_activa
+                    medicion.recalcular()
 
-        if self.filamento_en_curso is not None:
-            self.filamento_en_curso.km_por_pixel = (
-                self.escala_equipo_km
-            )
-            self.filamento_en_curso.recalcular()
+                if self.filamento_en_curso is not None:
+                    self.filamento_en_curso.km_por_pixel = (
+                        escala_activa
+                    )
+                    self.filamento_en_curso.recalcular()
 
         self.actualizar_comparacion_tierra_luna()
 
         self.statusBar().showMessage(
             tr("calibration_updated")
         )
+        self.actualizar_advertencia_calibracion()
 
     def iniciar_ajuste_parcial(self):
         if self.visor.modo_medicion_filamento:
@@ -4688,7 +5051,10 @@ class VentanaPrincipal(QMainWindow):
         escala_limbo = 1_391_400 / diametro
         km_por_pixel = (
             self.escala_equipo_km
-            if self.escala_equipo_km is not None
+            if (
+                self.escala_equipo_km is not None
+                and self.usar_escala_equipo
+            )
             else escala_limbo
         )
 
@@ -4741,7 +5107,9 @@ class VentanaPrincipal(QMainWindow):
             f"{tr('limb_scale')}: "
             f"{escala_limbo:,.1f} km/px\n"
             f"{tr('active_scale')}: "
-            f"{km_por_pixel:,.1f} km/px"
+            f"{km_por_pixel:,.1f} km/px\n"
+            f"{tr('calibration_source')}: "
+            f"{tr('active_scale_equipment' if self.usar_escala_equipo and self.escala_equipo_km is not None else 'active_scale_limb')}"
             f"{detalle_error}"
         )
         self.statusBar().showMessage(
@@ -4749,6 +5117,7 @@ class VentanaPrincipal(QMainWindow):
             f"{tr('provisional_scale')}: "
             f"{km_por_pixel:,.1f} km/px"
         )
+        self.actualizar_advertencia_calibracion()
 
     def actualizar_informacion(self, ruta):
         archivo = Path(ruta)
@@ -4757,6 +5126,9 @@ class VentanaPrincipal(QMainWindow):
         self.etiquetas_manchas.clear()
         self.ultimas_regiones_catalogo.clear()
         self.instante_catalogo = None
+        self.ajuste_catalogo_x = 0.0
+        self.ajuste_catalogo_y = 0.0
+        self.escala_mapa_catalogo = 1.0
         self.ruta_referencia_catalogo = None
         self.nombre_fuente_referencia_catalogo = ""
         self.detalle_alineacion_catalogo = ""
@@ -4776,10 +5148,12 @@ class VentanaPrincipal(QMainWindow):
         self.regla_solar = None
         self.boton_regla.setText(tr("show_ruler"))
         self.escala_equipo_km = None
+        self.usar_escala_equipo = True
         self.descripcion_calibracion = None
         self.etiqueta_medicion.setText(
             tr("pending_calibration")
         )
+        self.actualizar_advertencia_calibracion()
         self.ajustes.setValue(
             "archivos/ultima_carpeta",
             str(archivo.parent),
@@ -5042,6 +5416,11 @@ class VentanaPrincipal(QMainWindow):
                 border-left: 4px solid #FFB81C;
                 border-radius: 6px;
                 padding: 10px;
+            }
+
+            #calibracionAdvertencia {
+                color: #7A4300;
+                font-weight: 600;
             }
 
             #proximamente {

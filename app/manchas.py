@@ -134,11 +134,41 @@ class ControlTamanoMancha(QGraphicsEllipseItem):
     def __init__(self, etiqueta):
         super().__init__(-6, -6, 12, 12)
         self.etiqueta = etiqueta
-        # El grupo padre procesa el arrastre para evitar que el marcador se
-        # mueva como una anotación completa. Este elemento solo es visual.
-        self.setAcceptedMouseButtons(Qt.NoButton)
-        self.setAcceptHoverEvents(False)
+        self.arrastrando = False
+        # El control captura el arrastre directamente. Antes era solo
+        # decorativo y el evento terminaba moviendo todo el óvalo en vez de
+        # cambiar sus dimensiones.
+        self.setAcceptedMouseButtons(Qt.LeftButton)
+        self.setAcceptHoverEvents(True)
+        self.setCursor(Qt.SizeFDiagCursor)
         self.setZValue(2)
+
+    def mousePressEvent(self, event):
+        if event.button() != Qt.LeftButton:
+            event.ignore()
+            return
+        self.arrastrando = True
+        self.etiqueta.notificar_inicio_cambio()
+        event.accept()
+
+    def mouseMoveEvent(self, event):
+        if not self.arrastrando or not (event.buttons() & Qt.LeftButton):
+            event.ignore()
+            return
+        centro = self.etiqueta.grupo.pos()
+        posicion = event.scenePos()
+        self.etiqueta.establecer_tamano(
+            abs(posicion.x() - centro.x()) * 2,
+            abs(posicion.y() - centro.y()) * 2,
+        )
+        event.accept()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.arrastrando = False
+            event.accept()
+            return
+        event.ignore()
 
 
 class EtiquetaMancha:

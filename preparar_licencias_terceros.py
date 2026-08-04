@@ -39,7 +39,7 @@ def copiar_licencias():
         shutil.rmtree(DESTINO)
     DESTINO.mkdir(parents=True)
     resumen = [
-        "Licencias copiadas durante la construcción de HelioRegla 1.0.0",
+        "Licencias copiadas durante la construcción de HelioRegla 1.2.0",
         "",
     ]
 

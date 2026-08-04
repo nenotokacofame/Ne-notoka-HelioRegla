@@ -1,11 +1,11 @@
-Licencias copiadas durante la construcción de HelioRegla 1.0.0
+Licencias copiadas durante la construcción de HelioRegla 1.2.0
 
-PySide6: NO INSTALADO
-PySide6_Addons: NO INSTALADO
-PySide6_Essentials: NO INSTALADO
-shiboken6: NO INSTALADO
-numpy: 2.3.5
-Pillow: 12.2.0
-opencv-python-headless: NO INSTALADO
-pyinstaller: NO INSTALADO
-pyinstaller-hooks-contrib: NO INSTALADO
+PySide6: 6.11.1
+PySide6_Addons: 6.11.1
+PySide6_Essentials: 6.11.1
+shiboken6: 6.11.1
+numpy: 2.5.1
+Pillow: 12.3.0
+opencv-python-headless: 4.14.0.94
+pyinstaller: 6.21.0
+pyinstaller-hooks-contrib: 2026.6

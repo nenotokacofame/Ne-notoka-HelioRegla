@@ -21,7 +21,7 @@ from i18n import tr
 
 
 HELIOVIEWER_CAPTURA = "https://api.helioviewer.org/v2/takeScreenshot/"
-AGENTE = "Ne-notoka-HelioRegla/1.0.0"
+AGENTE = "Ne-notoka-HelioRegla/1.2.0"
 TAMANO_REFERENCIA = 1024
 ESCALA_REFERENCIA = 2.0
 
@@ -64,6 +64,12 @@ class ResultadoRegistro:
     referencia: ReferenciaSolar
     evidencia: int = 0
     separacion: float = 0.0
+    # Correcciones de placa normalizadas calculadas junto con la orientación.
+    # Se conservan para que las etiquetas usen exactamente la misma solución
+    # que obtuvo el registro, en vez de quedarse solo con rotación/espejos.
+    desplazamiento_x: float = 0.0
+    desplazamiento_y: float = 0.0
+    escala_mapa: float = 1.0
 
 
 class ErrorReferenciaSolar(RuntimeError):
@@ -702,10 +708,13 @@ def registrar_orientacion_catalogo(
     # así la orientación no depende de que Hough haya elegido exactamente el
     # mismo radio que el catálogo. No se altera el círculo del usuario: solo
     # se usa esta tolerancia para resolver la placa.
-    ajustes_geometricos = (
-        (0.0, 0.0, 1.000),
-        (0.0, 0.0, 0.975),
-        (0.0, 0.0, 1.025),
+    desplazamientos = (-0.035, 0.0, 0.035)
+    escalas = (0.975, 1.000, 1.025)
+    ajustes_geometricos = tuple(
+        (ajuste_x, ajuste_y, ajuste_radio)
+        for ajuste_x in desplazamientos
+        for ajuste_y in desplazamientos
+        for ajuste_radio in escalas
     )
 
     def evaluar(
@@ -854,9 +863,9 @@ def registrar_orientacion_catalogo(
         angulo,
         espejo_h,
         espejo_v,
-        _ajuste_x,
-        _ajuste_y,
-        _ajuste_radio,
+        ajuste_x,
+        ajuste_y,
+        ajuste_radio,
     ) = refinados[0]
     alternativas = [
         valor
@@ -888,6 +897,9 @@ def registrar_orientacion_catalogo(
         referencia=referencia,
         evidencia=fuertes,
         separacion=separacion,
+        desplazamiento_x=ajuste_x,
+        desplazamiento_y=ajuste_y,
+        escala_mapa=ajuste_radio,
     )
 
 

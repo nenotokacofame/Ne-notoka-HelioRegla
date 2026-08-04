@@ -8,6 +8,8 @@ TEXTOS = {
         "open_image": "Abrir imagen solar",
         "export": "Exportar",
         "export_image": "Exportar imagen anotada",
+        "batch_process": "Procesar lote",
+        "batch_process_action": "Procesar lote…",
         "open_project": "Abrir proyecto",
         "save_project": "Guardar proyecto",
         "fit_window": "Ajustar a ventana",
@@ -231,6 +233,36 @@ TEXTOS = {
         "physical_scale": "Escala física",
         "limb_scale": "Escala por limbo",
         "difference": "Diferencia",
+        "calibration_review": (
+            "⚠ Revisa binning, píxel, focal y redimensionado"
+        ),
+        "calibration_mismatch_title": (
+            "Escalas de calibración muy distintas"
+        ),
+        "calibration_mismatch_text": (
+            "La escala del equipo y la del limbo difieren {difference}%.\n"
+            "Limbo: {limb} km/px · Equipo: {equipment} km/px.\n\n"
+            "Una medición puede quedar muy sobreestimada o subestimada. "
+            "Verifica binning, tamaño de píxel, focal efectiva y "
+            "redimensionado."
+        ),
+        "calibration_use_equipment": "Usar escala del equipo",
+        "calibration_use_limb": "Usar escala del limbo",
+        "calibration_keep_editing": "Seguir editando",
+        "calibration_panel_warning": (
+            "⚠ Diferencia entre escalas: {difference}%\n"
+            "Limbo: {limb} km/px · Equipo: {equipment} km/px\n"
+            "Revisa binning, tamaño de píxel, focal efectiva y "
+            "redimensionado."
+        ),
+        "calibration_panel_critical": (
+            "⚠ GRAN DISCREPANCIA: {difference}% entre limbo y equipo\n"
+            "Limbo: {limb} km/px · Equipo: {equipment} km/px\n"
+            "Las mediciones físicas pueden variar considerablemente."
+        ),
+        "active_scale_equipment": "Equipo",
+        "active_scale_limb": "Limbo",
+        "calibration_source": "Fuente de calibración",
         "enter_pixel_focal": (
             "Introduce tamaño de píxel y focal efectiva."
         ),
@@ -258,6 +290,39 @@ TEXTOS = {
             "original:\n{width} × {height} píxeles\n\n{path}"
         ),
         "image_exported": "Imagen exportada: {name}",
+        "need_image_batch": (
+            "Necesitas cargar una fotografía plantilla antes de "
+            "procesar un lote."
+        ),
+        "finish_batch_editing": (
+            "Antes de procesar el lote, acepta o cancela el filamento "
+            "o el ajuste parcial en curso."
+        ),
+        "batch_select_title": "Seleccionar imágenes del lote",
+        "batch_output_title": "Elegir carpeta de salida",
+        "batch_title": "Procesamiento por lotes",
+        "batch_progress": "Preparando imágenes…",
+        "batch_processing": "Procesando {name}…",
+        "batch_confirm_title": "Confirmar procesamiento por lotes",
+        "batch_confirm_text": (
+            "Se aplicarán las anotaciones actuales a {count} imágenes "
+            "de {width} × {height} píxeles y se guardarán como PNG en:\n"
+            "{path}\n\n¿Continuar?"
+        ),
+        "batch_no_compatible": "No hay imágenes compatibles",
+        "batch_no_compatible_text": (
+            "Las imágenes seleccionadas deben poder abrirse y tener la "
+            "misma resolución que la plantilla ({width} × {height})."
+        ),
+        "batch_done_title": "Procesamiento terminado",
+        "batch_done_text": (
+            "Imágenes guardadas: {count}\n"
+            "Imágenes omitidas o con error: {skipped}\n"
+            "Cancelado: {cancelled}\n\nCarpeta de salida:\n{path}"
+        ),
+        "batch_done_status": "Lote terminado: {count} imágenes guardadas",
+        "batch_yes": "Sí",
+        "batch_no": "No",
         "need_image_project": (
             "Necesitas una fotografía antes de guardar un proyecto."
         ),
@@ -600,6 +665,8 @@ TEXTOS = {
         "open_image": "Open solar image",
         "export": "Export",
         "export_image": "Export annotated image",
+        "batch_process": "Process batch",
+        "batch_process_action": "Process batch…",
         "open_project": "Open project",
         "save_project": "Save project",
         "fit_window": "Fit to window",
@@ -810,6 +877,36 @@ TEXTOS = {
         "physical_scale": "Physical scale",
         "limb_scale": "Limb scale",
         "difference": "Difference",
+        "calibration_review": (
+            "⚠ Check binning, pixel size, focal length and resizing"
+        ),
+        "calibration_mismatch_title": (
+            "Large calibration-scale mismatch"
+        ),
+        "calibration_mismatch_text": (
+            "The equipment and limb scales differ by {difference}%.\n"
+            "Limb: {limb} km/px · Equipment: {equipment} km/px.\n\n"
+            "A measurement may be greatly over- or underestimated. "
+            "Check binning, pixel size, effective focal length and "
+            "resizing."
+        ),
+        "calibration_use_equipment": "Use equipment scale",
+        "calibration_use_limb": "Use limb scale",
+        "calibration_keep_editing": "Keep editing",
+        "calibration_panel_warning": (
+            "⚠ Scale difference: {difference}%\n"
+            "Limb: {limb} km/px · Equipment: {equipment} km/px\n"
+            "Check binning, pixel size, effective focal length and "
+            "resizing."
+        ),
+        "calibration_panel_critical": (
+            "⚠ LARGE MISMATCH: {difference}% between limb and equipment\n"
+            "Limb: {limb} km/px · Equipment: {equipment} km/px\n"
+            "Physical measurements may vary considerably."
+        ),
+        "active_scale_equipment": "Equipment",
+        "active_scale_limb": "Limb",
+        "calibration_source": "Calibration source",
         "enter_pixel_focal": (
             "Enter pixel size and effective focal length."
         ),
@@ -835,6 +932,38 @@ TEXTOS = {
             "resolution:\n{width} × {height} pixels\n\n{path}"
         ),
         "image_exported": "Image exported: {name}",
+        "need_image_batch": (
+            "Load a template photograph before processing a batch."
+        ),
+        "finish_batch_editing": (
+            "Accept or cancel the filament or partial-limb adjustment "
+            "before processing the batch."
+        ),
+        "batch_select_title": "Select batch images",
+        "batch_output_title": "Choose output folder",
+        "batch_title": "Batch processing",
+        "batch_progress": "Preparing images…",
+        "batch_processing": "Processing {name}…",
+        "batch_confirm_title": "Confirm batch processing",
+        "batch_confirm_text": (
+            "The current annotations will be applied to {count} images "
+            "of {width} × {height} pixels and saved as PNG files in:\n"
+            "{path}\n\nContinue?"
+        ),
+        "batch_no_compatible": "No compatible images",
+        "batch_no_compatible_text": (
+            "Selected images must be readable and have the same "
+            "resolution as the template ({width} × {height})."
+        ),
+        "batch_done_title": "Processing complete",
+        "batch_done_text": (
+            "Images saved: {count}\n"
+            "Images skipped or failed: {skipped}\n"
+            "Cancelled: {cancelled}\n\nOutput folder:\n{path}"
+        ),
+        "batch_done_status": "Batch complete: {count} images saved",
+        "batch_yes": "Yes",
+        "batch_no": "No",
         "need_image_project": (
             "An image is required before saving a project."
         ),

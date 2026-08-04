@@ -4,7 +4,7 @@ chcp 65001 >nul
 cd /d "%~dp0"
 
 echo ============================================================
-echo   Ne-notoka HelioRegla 1.0.0 - Constructor del instalador
+echo   Ne-notoka HelioRegla 1.2.0 - Constructor del instalador
 echo ============================================================
 echo.
 
@@ -75,7 +75,7 @@ if errorlevel 1 goto :error
 echo.
 echo ============================================================
 echo INSTALADOR CREADO CORRECTAMENTE
-echo dist_instalador\Ne-notoka_HelioRegla_1.0.0_Setup.exe
+echo dist_instalador\Ne-notoka_HelioRegla_1.2.0_Setup.exe
 echo ============================================================
 start "" "dist_instalador"
 pause
