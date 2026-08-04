@@ -7,6 +7,7 @@
 - F: ajustar la imagen a la ventana.
 - 1: mostrar la imagen al 100 %.
 - Ctrl + Shift + S: exportar la imagen anotada.
+- Ctrl + Shift + B: procesar un lote con las anotaciones actuales.
 - Ctrl + S: guardar el proyecto editable.
 - Ctrl + Alt + O: abrir un proyecto HelioRegla.
 
@@ -22,6 +23,14 @@
 - Exporta PNG, JPEG o TIFF con las dimensiones originales.
 - El resultado se recorta exactamente a la fotografía.
 - No incluye el fondo negro, los nodos de edición ni los puntos auxiliares.
+
+### Procesamiento por lotes
+
+- **Procesar lote:** selecciona varias imágenes ya alineadas y una carpeta de
+  salida; cada fotograma recibe las mismas anotaciones de la imagen plantilla.
+- Las imágenes deben conservar la misma resolución y registro de píxeles.
+- Se generan PNG con el sufijo `_anotada`; nunca se reemplazan archivos
+  existentes.
 
 ## Ajuste del limbo
 

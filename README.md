@@ -13,6 +13,8 @@ ciudadana y divulgación.
 - Consulta y etiquetado de regiones activas mediante NOAA SRS y HEK.
 - Referencias solares HMI, GONG H-alpha y AIA 1700 Å mediante Helioviewer.
 - Exportación de imágenes anotadas y proyectos editables `.helio`.
+- Procesamiento por lotes para aplicar las mismas anotaciones a fotogramas
+  ya alineados de un timelapse.
 - Interfaz en español e inglés.
 
 ## Licencia

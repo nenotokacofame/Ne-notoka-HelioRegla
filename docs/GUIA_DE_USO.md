@@ -20,6 +20,24 @@ resultante conserva la resolución original y solamente contiene la fotografía
 con las líneas, textos, limbo y regla visibles. El fondo negro del área de
 trabajo y los controles de edición no forman parte de la exportación.
 
+## Procesar un lote de imágenes
+
+El procesamiento por lotes sirve para preparar fotogramas de un timelapse
+cuando todas las imágenes ya están alineadas entre sí:
+
+1. Abre una imagen plantilla y crea todas las anotaciones que quieras
+   repetir: limbo, regla, comparaciones, regiones activas, protuberancias y
+   filamentos.
+2. Pulsa **Procesar lote** (también **Ctrl + Shift + B**).
+3. Selecciona las imágenes del timelapse y después una carpeta de salida.
+4. HelioRegla guardará un PNG por imagen con el sufijo `_anotada`.
+
+Las posiciones se copian en píxeles, sin volver a detectar ni mover el limbo.
+Por eso los fotogramas deben tener la misma resolución, recorte, orientación y
+alineación que la plantilla. Las imágenes de otra resolución se omiten y se
+informan al terminar. La fotografía original nunca se sobrescribe; si el
+nombre de salida ya existe se añade un número.
+
 ## Guardar un proyecto editable
 
 Pulsa **Guardar proyecto** o **Ctrl + S**. El archivo `.helio` conserva la
@@ -41,6 +59,13 @@ La calibración por equipo utiliza:
 - Binning.
 - Redimensionamiento de la imagen.
 - Fecha y distancia Tierra-Sol.
+
+HelioRegla compara la escala del equipo con la escala del limbo. Una
+diferencia mayor al 5% aparece como advertencia amarilla y una mayor al 15%
+como advertencia roja. En este último caso puedes conservar la escala del
+equipo, usar la del limbo o volver a editar los datos. Revisa especialmente
+binning, tamaño de píxel, focal efectiva y cualquier redimensionamiento de la
+imagen.
 
 ## Incertidumbres
 

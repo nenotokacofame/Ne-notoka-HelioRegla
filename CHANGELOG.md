@@ -1,10 +1,31 @@
 ﻿# Historial de cambios
 
-## Próxima 1.1.0
+## 1.2.0
 
+- Añadida comprobación visible de coherencia entre la escala calculada por el
+  limbo y la escala introducida mediante los datos del equipo.
+- La calibración muestra advertencias amarillas o rojas cuando la diferencia
+  supera el 5% o el 15%, respectivamente, indicando qué parámetros revisar.
+- Si la discrepancia supera el 15%, el usuario puede conservar la escala del
+  equipo, usar la escala del limbo o volver a editar los datos.
+- La elección de escala activa se conserva en los proyectos y recalcula las
+  mediciones, la regla solar y las comparaciones.
+
+## 1.1.0
+
+- Añadido procesamiento por lotes para aplicar las anotaciones de una imagen
+  plantilla a varios fotogramas ya alineados de un timelapse.
+- El lote conserva las posiciones vectoriales y el tamaño en píxeles de todas
+  las anotaciones, genera PNG sin sobrescribir archivos y omite resoluciones
+  incompatibles con un informe final.
 - Corregido el arrastre del control de tamaño de las regiones activas: ahora
   el grupo distingue el control de esquina del movimiento de la anotación y
   modifica el ancho y el alto del óvalo correctamente.
+- Añadido `0 px` al contorno del limbo para ocultarlo sin perder los
+  manejadores de edición.
+- La alineación automática guiada por NOAA/HEK prueba y conserva pequeños
+  desplazamientos y escalas globales además de la rotación y los espejos;
+  la misma corrección se guarda en los proyectos y se aplica a las etiquetas.
 
 ## 1.0.0
 
