@@ -1,5 +1,19 @@
 ﻿# Historial de cambios
 
+## 1.3.0
+
+- Añadidos estilos independientes para mediciones de protuberancias,
+  filamentos, regiones activas, distancia Tierra–Luna e información
+  planetaria.
+- Cada estilo permite elegir color, tamaño y familia tipográfica; la regla
+  solar también tiene su propia fuente.
+- Los colores de distancia e información planetaria pasan del menú
+  **Comparaciones** al panel izquierdo de estilos.
+- Las etiquetas de protuberancias y filamentos terminados se pueden mover con
+  arrastre para despejarlas de la estructura medida.
+- La posición manual de esas etiquetas se conserva en proyectos `.helio`,
+  Ctrl+Z y exportaciones por lotes.
+
 ## 1.2.0
 
 - Añadida comprobación visible de coherencia entre la escala calculada por el

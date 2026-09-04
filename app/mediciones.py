@@ -40,7 +40,17 @@ class EtiquetaMedicion(QGraphicsSimpleTextItem):
     def __init__(self, medicion):
         super().__init__()
         self.medicion = medicion
+        self.arrastrando = False
+        self._desplazamiento_arrastre = QPointF()
         self.setCursor(Qt.PointingHandCursor)
+        self.setFlag(QGraphicsItem.ItemIsMovable, True)
+        self.setFlag(
+            QGraphicsItem.ItemSendsGeometryChanges,
+            True,
+        )
+        self.setAcceptedMouseButtons(
+            Qt.LeftButton | Qt.RightButton
+        )
 
     def mousePressEvent(self, event):
         if event.button() == Qt.RightButton:
@@ -49,7 +59,49 @@ class EtiquetaMedicion(QGraphicsSimpleTextItem):
             event.accept()
             return
 
+        if event.button() == Qt.LeftButton:
+            self.medicion.notificar_inicio_cambio()
+            self.arrastrando = True
+            self._desplazamiento_arrastre = (
+                event.scenePos() - self.scenePos()
+            )
+            event.accept()
+            return
+
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self.arrastrando and event.buttons() & Qt.LeftButton:
+            posicion = (
+                event.scenePos()
+                - self._desplazamiento_arrastre
+            )
+            self.setPos(
+                self.medicion.limitar_posicion_etiqueta(
+                    posicion
+                )
+            )
+            event.accept()
+            return
+
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton and self.arrastrando:
+            self.arrastrando = False
+            self.medicion.fijar_posicion_etiqueta(self.pos())
+            event.accept()
+            return
+
+        super().mouseReleaseEvent(event)
+
+    def itemChange(self, cambio, valor):
+        if cambio == QGraphicsItem.ItemPositionChange:
+            return self.medicion.limitar_posicion_etiqueta(
+                QPointF(valor)
+            )
+
+        return super().itemChange(cambio, valor)
 
 
 class ManejadorProtuberancia(QGraphicsEllipseItem):
@@ -112,6 +164,7 @@ class MedicionProtuberancia:
         color_anotacion="#ff3dbb",
         tamano_texto=28,
         antes_cambiar=None,
+        familia_fuente="Century Gothic",
     ):
         self.escena = escena
         self.circulo_limbo = circulo_limbo
@@ -124,9 +177,13 @@ class MedicionProtuberancia:
         self.al_eliminar = al_eliminar
         self.color_anotacion = color_anotacion
         self.tamano_texto = tamano_texto
+        self.familia_fuente = str(
+            familia_fuente or "Century Gothic"
+        )
         self.antes_cambiar = antes_cambiar
         self.eliminada = False
         self.punta = QPointF(punta)
+        self.desplazamiento_etiqueta = None
 
         self.linea = LineaMedicion(self)
         lapiz = QPen(QColor("#ff3dbb"), 3)
@@ -147,6 +204,7 @@ class MedicionProtuberancia:
         self.establecer_estilo(
             self.color_anotacion,
             self.tamano_texto,
+            self.familia_fuente,
         )
         self.actualizar(punta)
 
@@ -154,9 +212,17 @@ class MedicionProtuberancia:
         if self.antes_cambiar:
             self.antes_cambiar()
 
-    def establecer_estilo(self, color, tamano_texto):
+    def establecer_estilo(
+        self,
+        color,
+        tamano_texto,
+        familia_fuente="Century Gothic",
+    ):
         self.color_anotacion = color
         self.tamano_texto = tamano_texto
+        self.familia_fuente = str(
+            familia_fuente or "Century Gothic"
+        )
 
         color_qt = QColor(color)
 
@@ -168,7 +234,7 @@ class MedicionProtuberancia:
 
         self.manejador.setBrush(color_qt)
         self.etiqueta.setBrush(color_qt)
-        fuente = QFont("Century Gothic")
+        fuente = QFont(self.familia_fuente)
         fuente.setPixelSize(int(tamano_texto))
         fuente.setBold(True)
         self.etiqueta.setFont(fuente)
@@ -202,22 +268,52 @@ class MedicionProtuberancia:
         desplazamiento = 14
         caja = self.etiqueta.boundingRect()
 
-        x = punta.x() + desplazamiento
-        y = punta.y() - caja.height() - desplazamiento
+        if self.desplazamiento_etiqueta is not None:
+            x, y = self.desplazamiento_etiqueta
+        else:
+            x = punta.x() + desplazamiento
+            y = punta.y() - caja.height() - desplazamiento
 
-        if x + caja.width() > self.imagen_rect.right() - margen:
-            x = punta.x() - caja.width() - desplazamiento
+            if x + caja.width() > self.imagen_rect.right() - margen:
+                x = punta.x() - caja.width() - desplazamiento
 
-        if x < self.imagen_rect.left() + margen:
-            x = self.imagen_rect.left() + margen
+            if x < self.imagen_rect.left() + margen:
+                x = self.imagen_rect.left() + margen
 
-        if y < self.imagen_rect.top() + margen:
-            y = punta.y() + desplazamiento
+            if y < self.imagen_rect.top() + margen:
+                y = punta.y() + desplazamiento
 
-        if y + caja.height() > self.imagen_rect.bottom() - margen:
-            y = self.imagen_rect.bottom() - caja.height() - margen
+            if y + caja.height() > self.imagen_rect.bottom() - margen:
+                y = self.imagen_rect.bottom() - caja.height() - margen
 
-        self.etiqueta.setPos(x, y)
+        self.etiqueta.setPos(
+            self.limitar_posicion_etiqueta(QPointF(x, y))
+        )
+
+    def limitar_posicion_etiqueta(self, posicion):
+        caja = self.etiqueta.boundingRect()
+        margen = 4.0
+        min_x = self.imagen_rect.left() + margen
+        min_y = self.imagen_rect.top() + margen
+        max_x = max(min_x, self.imagen_rect.right() - caja.width() - margen)
+        max_y = max(min_y, self.imagen_rect.bottom() - caja.height() - margen)
+        return QPointF(
+            min(max(float(posicion.x()), min_x), max_x),
+            min(max(float(posicion.y()), min_y), max_y),
+        )
+
+    def fijar_posicion_etiqueta(self, posicion):
+        posicion = self.limitar_posicion_etiqueta(posicion)
+        self.desplazamiento_etiqueta = (
+            posicion.x(),
+            posicion.y(),
+        )
+        self.etiqueta.setPos(posicion)
+
+    def establecer_desplazamiento_etiqueta(self, x, y):
+        self.fijar_posicion_etiqueta(
+            QPointF(float(x), float(y))
+        )
 
     def actualizar(self, punta, mover_manejador=True):
         self.punta = QPointF(punta)
@@ -267,6 +363,16 @@ class MedicionProtuberancia:
     def recalcular_desde_limbo(self):
         if not self.eliminada:
             self.actualizar(self.punta)
+
+    def estado(self):
+        estado = {
+            "x": self.punta.x(),
+            "y": self.punta.y(),
+        }
+        if self.desplazamiento_etiqueta is not None:
+            estado["texto_x"] = self.desplazamiento_etiqueta[0]
+            estado["texto_y"] = self.desplazamiento_etiqueta[1]
+        return estado
 
     def eliminar(self):
         if self.eliminada:

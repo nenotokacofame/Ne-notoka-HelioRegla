@@ -1,1 +1,1 @@
-﻿49a19bf06f8f017a2f2ff2a1d01e30907dca0abd44f98df36e898359a70f74a6 *dist_instalador/Ne-notoka_HelioRegla_1.2.0_Setup.exe
+﻿944f4d0a752488ffdd1c4aa371ab3d0b850e03219f7ea51914be8f2058d6a4ae *dist_instalador/Ne-notoka_HelioRegla_1.1.0_Setup.exe

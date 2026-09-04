@@ -37,14 +37,71 @@ class EtiquetaFilamento(QGraphicsTextItem):
     def __init__(self, medicion):
         super().__init__()
         self.medicion = medicion
+        self.arrastrando = False
+        self._desplazamiento_arrastre = QPointF()
         self.setZValue(47)
+        self.setTextInteractionFlags(Qt.NoTextInteraction)
+        self.setFlag(QGraphicsItem.ItemIsMovable, True)
+        self.setFlag(
+            QGraphicsItem.ItemSendsGeometryChanges,
+            True,
+        )
+        self.setAcceptedMouseButtons(
+            Qt.LeftButton | Qt.RightButton
+        )
 
     def mousePressEvent(self, event):
         if event.button() == Qt.RightButton:
             self.medicion.eliminar()
             event.accept()
             return
+
+        if event.button() == Qt.LeftButton:
+            if not self.medicion.finalizada:
+                event.ignore()
+                return
+            self.medicion.notificar_inicio_cambio()
+            self.arrastrando = True
+            self._desplazamiento_arrastre = (
+                event.scenePos() - self.scenePos()
+            )
+            event.accept()
+            return
+
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self.arrastrando and event.buttons() & Qt.LeftButton:
+            posicion = (
+                event.scenePos()
+                - self._desplazamiento_arrastre
+            )
+            self.setPos(
+                self.medicion.limitar_posicion_etiqueta(
+                    posicion
+                )
+            )
+            event.accept()
+            return
+
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton and self.arrastrando:
+            self.arrastrando = False
+            self.medicion.fijar_posicion_etiqueta(self.pos())
+            event.accept()
+            return
+
+        super().mouseReleaseEvent(event)
+
+    def itemChange(self, cambio, valor):
+        if cambio == QGraphicsItem.ItemPositionChange:
+            return self.medicion.limitar_posicion_etiqueta(
+                QPointF(valor)
+            )
+
+        return super().itemChange(cambio, valor)
 
 
 class PuntoFilamento(QGraphicsEllipseItem):
@@ -110,6 +167,7 @@ class MedicionFilamento:
         tamano_texto=28,
         antes_cambiar=None,
         finalizada=True,
+        familia_fuente="Century Gothic",
     ):
         self.escena = escena
         self.puntos = [QPointF(p) for p in puntos]
@@ -118,9 +176,13 @@ class MedicionFilamento:
         self.al_eliminar = al_eliminar
         self.color = color
         self.tamano_texto = int(tamano_texto)
+        self.familia_fuente = str(
+            familia_fuente or "Century Gothic"
+        )
         self.antes_cambiar = antes_cambiar
         self.finalizada = finalizada
         self.eliminada = False
+        self.desplazamiento_etiqueta = None
 
         self.trazo = TrazoFilamento(self)
         self.etiqueta = EtiquetaFilamento(self)
@@ -128,7 +190,11 @@ class MedicionFilamento:
         self.escena.addItem(self.trazo)
         self.escena.addItem(self.etiqueta)
         self._recrear_manejadores()
-        self.establecer_estilo(color, tamano_texto)
+        self.establecer_estilo(
+            color,
+            tamano_texto,
+            self.familia_fuente,
+        )
         self.actualizar()
 
     def _recrear_manejadores(self):
@@ -275,31 +341,44 @@ class MedicionFilamento:
         referencia = self.puntos[len(self.puntos) // 2]
         rectangulo = self.etiqueta.boundingRect()
         margen = 8
-        x = referencia.x() + 12
-        y = referencia.y() - rectangulo.height() - 12
-        x = max(
-            self.imagen_rect.left() + margen,
-            min(
-                x,
-                self.imagen_rect.right()
-                - rectangulo.width()
-                - margen,
-            ),
+        if self.desplazamiento_etiqueta is not None:
+            x, y = self.desplazamiento_etiqueta
+        else:
+            x = referencia.x() + 12
+            y = referencia.y() - rectangulo.height() - 12
+            x = max(
+                self.imagen_rect.left() + margen,
+                min(
+                    x,
+                    self.imagen_rect.right()
+                    - rectangulo.width()
+                    - margen,
+                ),
+            )
+            y = max(
+                self.imagen_rect.top() + margen,
+                min(
+                    y,
+                    self.imagen_rect.bottom()
+                    - rectangulo.height()
+                    - margen,
+                ),
+            )
+        self.etiqueta.setPos(
+            self.limitar_posicion_etiqueta(QPointF(x, y))
         )
-        y = max(
-            self.imagen_rect.top() + margen,
-            min(
-                y,
-                self.imagen_rect.bottom()
-                - rectangulo.height()
-                - margen,
-            ),
-        )
-        self.etiqueta.setPos(x, y)
 
-    def establecer_estilo(self, color, tamano_texto):
+    def establecer_estilo(
+        self,
+        color,
+        tamano_texto,
+        familia_fuente="Century Gothic",
+    ):
         self.color = color
         self.tamano_texto = int(tamano_texto)
+        self.familia_fuente = str(
+            familia_fuente or "Century Gothic"
+        )
 
         lapiz = QPen(QColor(color), 3)
         lapiz.setCosmetic(True)
@@ -309,7 +388,7 @@ class MedicionFilamento:
         lapiz.setJoinStyle(Qt.RoundJoin)
         self.trazo.setPen(lapiz)
 
-        fuente = QFont("Century Gothic")
+        fuente = QFont(self.familia_fuente)
         fuente.setPixelSize(self.tamano_texto)
         fuente.setBold(True)
         self.etiqueta.setFont(fuente)
@@ -322,6 +401,37 @@ class MedicionFilamento:
 
     def recalcular(self):
         self.actualizar()
+
+    def limitar_posicion_etiqueta(self, posicion):
+        caja = self.etiqueta.boundingRect()
+        margen = 4.0
+        min_x = self.imagen_rect.left() + margen
+        min_y = self.imagen_rect.top() + margen
+        max_x = max(
+            min_x,
+            self.imagen_rect.right() - caja.width() - margen,
+        )
+        max_y = max(
+            min_y,
+            self.imagen_rect.bottom() - caja.height() - margen,
+        )
+        return QPointF(
+            min(max(float(posicion.x()), min_x), max_x),
+            min(max(float(posicion.y()), min_y), max_y),
+        )
+
+    def fijar_posicion_etiqueta(self, posicion):
+        posicion = self.limitar_posicion_etiqueta(posicion)
+        self.desplazamiento_etiqueta = (
+            posicion.x(),
+            posicion.y(),
+        )
+        self.etiqueta.setPos(posicion)
+
+    def establecer_desplazamiento_etiqueta(self, x, y):
+        self.fijar_posicion_etiqueta(
+            QPointF(float(x), float(y))
+        )
 
     def eliminar(self):
         if self.eliminada:
@@ -346,3 +456,10 @@ class MedicionFilamento:
             {"x": punto.x(), "y": punto.y()}
             for punto in self.puntos
         ]
+
+    def estado_completo(self):
+        estado = {"puntos": self.estado()}
+        if self.desplazamiento_etiqueta is not None:
+            estado["texto_x"] = self.desplazamiento_etiqueta[0]
+            estado["texto_y"] = self.desplazamiento_etiqueta[1]
+        return estado

@@ -17,6 +17,7 @@ class ReglaSolar:
         color="#00A6C8",
         grosor=1,
         tamano_texto=18,
+        familia_fuente="Century Gothic",
     ):
         self.escena = escena
         self.intervalo_km = intervalo_km
@@ -24,6 +25,9 @@ class ReglaSolar:
         self.color = color
         self.grosor = grosor
         self.tamano_texto = tamano_texto
+        self.familia_fuente = str(
+            familia_fuente or "Century Gothic"
+        )
         self.elementos = []
 
     def limpiar(self):
@@ -43,12 +47,16 @@ class ReglaSolar:
         color,
         grosor,
         tamano_texto,
+        familia_fuente="Century Gothic",
     ):
         self.intervalo_km = intervalo_km
         self.maximo_km = maximo_km
         self.color = color
         self.grosor = grosor
         self.tamano_texto = tamano_texto
+        self.familia_fuente = str(
+            familia_fuente or "Century Gothic"
+        )
 
     def _punto_visible_para_etiqueta(
         self,
@@ -134,9 +142,9 @@ class ReglaSolar:
                     f"{distancia:,.0f} km"
                 )
                 etiqueta.setBrush(QColor(self.color))
-                etiqueta.setFont(
-                    QFont("Century Gothic", self.tamano_texto)
-                )
+                fuente = QFont(self.familia_fuente)
+                fuente.setPixelSize(int(self.tamano_texto))
+                etiqueta.setFont(fuente)
                 etiqueta.setZValue(16)
 
                 caja = etiqueta.boundingRect()

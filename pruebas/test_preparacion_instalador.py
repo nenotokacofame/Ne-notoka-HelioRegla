@@ -14,7 +14,7 @@ class PreparacionInstaladorTests(unittest.TestCase):
         acerca = self.leer("app/acerca_de.py")
         licencia = self.leer("LICENSE")
 
-        self.assertIn('VERSION = "1.2.0"', main)
+        self.assertIn('VERSION = "1.3.0"', main)
         self.assertIn('AUTOR = "David Olivos S."', acerca)
         self.assertIn(
             'URL_DONATIVOS = "https://paypal.me/nenotokacofame"',
@@ -45,7 +45,7 @@ class PreparacionInstaladorTests(unittest.TestCase):
         inno = self.leer("instalador/Ne-notoka_HelioRegla.iss")
 
         esperados = (
-            '#define MyAppVersion "1.2.0"',
+            '#define MyAppVersion "1.3.0"',
             "PrivilegesRequired=lowest",
             "MinVersion=10.0",
             "LicenseFile=..\\LICENSE",
@@ -53,7 +53,7 @@ class PreparacionInstaladorTests(unittest.TestCase):
             'Name: "spanish"',
             'Name: "english"',
             "{userdesktop}",
-            "Ne-notoka_HelioRegla_1.2.0_Setup",
+            "Ne-notoka_HelioRegla_1.3.0_Setup",
         )
         for fragmento in esperados:
             self.assertIn(fragmento, inno)
@@ -66,7 +66,7 @@ class PreparacionInstaladorTests(unittest.TestCase):
         self.assertIn("JRSoftware.InnoSetup", constructor)
         self.assertIn('"%ISCC%"', constructor)
         self.assertIn(
-            "dist_instalador\\Ne-notoka_HelioRegla_1.2.0_Setup.exe",
+            "dist_instalador\\Ne-notoka_HelioRegla_1.3.0_Setup.exe",
             constructor,
         )
 

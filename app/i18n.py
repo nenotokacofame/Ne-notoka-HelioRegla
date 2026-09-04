@@ -96,12 +96,39 @@ TEXTOS = {
         "ruler_color": "Color de regla",
         "annotation_color": "Color de anotaciones",
         "outline_color": "Color del contorno",
+        "annotation_styles": "ESTILOS DE ANOTACIONES",
+        "prominence_style": "Medición de protuberancia",
+        "filament_style": "Medición de filamento",
+        "active_region_style": "Anotación de región activa (RA)",
+        "distance_style": "Distancia Tierra–Luna",
+        "planet_info_style": "Información planetaria",
+        "color_button": "Color",
+        "select_prominence_color": (
+            "Seleccionar color de medición de protuberancia"
+        ),
+        "select_filament_color": (
+            "Seleccionar color de medición de filamento"
+        ),
+        "select_active_region_color": (
+            "Seleccionar color de anotación RA"
+        ),
+        "annotation_color_tooltip": (
+            "Seleccionar color de esta anotación"
+        ),
+        "font_type_tooltip": "Seleccionar tipo de fuente",
+        "annotation_size_tooltip": (
+            "Tamaño del texto en píxeles de la imagen"
+        ),
+        "ruler_font_tooltip": (
+            "Seleccionar tipo de fuente de la regla solar"
+        ),
         "finish_partial": "Finalizar ajuste parcial",
         "cancel_points": "Cancelar puntos",
         "pending_calibration": "Calibración pendiente",
         "no_image": "Ninguna imagen cargada",
         "help": (
             "Rueda: zoom\nArrastrar: desplazar\n"
+            "Arrastra el texto de una medición para moverlo\n"
             "También puedes soltar una imagen."
         ),
         "coming_soon": (
@@ -753,12 +780,37 @@ TEXTOS = {
         "ruler_color": "Ruler color",
         "annotation_color": "Annotation color",
         "outline_color": "Limb outline color",
+        "annotation_styles": "ANNOTATION STYLES",
+        "prominence_style": "Prominence measurement",
+        "filament_style": "Filament measurement",
+        "active_region_style": "Active region annotation (AR)",
+        "distance_style": "Earth–Moon distance",
+        "planet_info_style": "Planet information",
+        "color_button": "Color",
+        "select_prominence_color": (
+            "Select prominence measurement color"
+        ),
+        "select_filament_color": (
+            "Select filament measurement color"
+        ),
+        "select_active_region_color": (
+            "Select active region annotation color"
+        ),
+        "annotation_color_tooltip": (
+            "Select the color for this annotation"
+        ),
+        "font_type_tooltip": "Select font family",
+        "annotation_size_tooltip": (
+            "Text size in image pixels"
+        ),
+        "ruler_font_tooltip": "Select solar ruler font family",
         "finish_partial": "Finish partial adjustment",
         "cancel_points": "Cancel points",
         "pending_calibration": "Calibration pending",
         "no_image": "No image loaded",
         "help": (
             "Wheel: zoom\nDrag: pan\n"
+            "Drag a measurement label to move it\n"
             "You can also drop an image here."
         ),
         "coming_soon": (

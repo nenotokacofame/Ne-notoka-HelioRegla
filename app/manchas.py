@@ -187,6 +187,7 @@ class EtiquetaMancha:
         al_eliminar=None,
         al_editar=None,
         antes_cambiar=None,
+        familia_fuente="Century Gothic",
     ):
         self.escena = escena
         self.punto = QPointF(punto)
@@ -194,6 +195,9 @@ class EtiquetaMancha:
         self.imagen_rect = imagen_rect
         self.color = color
         self.tamano_texto = int(tamano_texto)
+        self.familia_fuente = str(
+            familia_fuente or "Century Gothic"
+        )
         diametro = max(12.0, float(radio) * 2)
         self.ancho = max(
             12.0,
@@ -223,7 +227,11 @@ class EtiquetaMancha:
         self.grupo.addToGroup(self.texto)
         self.escena.addItem(self.grupo)
         self.grupo.setPos(self.punto)
-        self.establecer_estilo(color, tamano_texto)
+        self.establecer_estilo(
+            color,
+            tamano_texto,
+            self.familia_fuente,
+        )
 
     def notificar_inicio_cambio(self):
         if self.antes_cambiar is not None:
@@ -237,9 +245,17 @@ class EtiquetaMancha:
         self.nombre = str(nombre)
         self.actualizar()
 
-    def establecer_estilo(self, color, tamano_texto):
+    def establecer_estilo(
+        self,
+        color,
+        tamano_texto,
+        familia_fuente="Century Gothic",
+    ):
         self.color = str(color)
         self.tamano_texto = int(tamano_texto)
+        self.familia_fuente = str(
+            familia_fuente or "Century Gothic"
+        )
 
         lapiz = QPen(QColor(self.color), 2)
         lapiz.setCapStyle(Qt.RoundCap)
@@ -249,7 +265,7 @@ class EtiquetaMancha:
         self.control_tamano.setBrush(QBrush(QColor(self.color)))
         self.linea.setPen(lapiz)
 
-        fuente = QFont("Century Gothic")
+        fuente = QFont(self.familia_fuente)
         fuente.setPixelSize(self.tamano_texto)
         fuente.setBold(True)
         self.texto.setFont(fuente)

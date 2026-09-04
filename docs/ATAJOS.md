@@ -54,6 +54,8 @@ Después de hacer clic sobre el círculo:
 - Medir protuberancia: iniciar una medición.
 - Clic izquierdo: colocar la punta.
 - Arrastrar el punto de color: reajustar la punta.
+- Arrastrar el texto terminado: mover la etiqueta a un lado de la
+  protuberancia.
 - Clic derecho en el punto, línea o texto: eliminar esa medición.
 - Borrar mediciones: eliminar todas.
 
@@ -77,11 +79,22 @@ Si existen mediciones, HelioRegla solicita confirmación antes de cerrar.
 - **Aceptar medición:** finaliza la medición y oculta sus puntos.
 - **Esc:** cancela el trazado en curso.
 - **Arrastrar un punto:** afina la forma del filamento.
+- **Arrastrar el texto terminado:** mueve la etiqueta para que no cubra el
+  filamento.
 - **Clic derecho sobre un punto, línea o texto terminado:** elimina esa medición.
 - **Ctrl+Z:** deshace creación, eliminación o movimiento.
 
 Después de aceptar una medición, pulsa nuevamente **Medir filamento** para
 trazar otro. Las curvas y resultados anteriores permanecen visibles.
+
+## Estilos
+
+- **Estilos de anotaciones:** permite seleccionar por separado color, fuente y
+  tamaño para protuberancias, filamentos, regiones activas, distancia
+  Tierra–Luna e información planetaria.
+- **Color del contorno:** admite `0 px` para ocultar el contorno del limbo.
+- La regla solar tiene controles independientes de color, grosor, tamaño y
+  fuente.
 
 ## Regiones activas
 
@@ -130,10 +143,8 @@ exportación.
   comparación no existe todavía, la crea automáticamente.
 - **Mostrar línea y distancia:** permite ocultar el punteo y su texto,
   conservando solamente la Tierra y la Luna a la separación elegida.
-- **Color de la distancia:** cambia el color del punteo y del texto de
-  separación.
-- **Color de información planetaria:** cambia nombres y diámetros de
-  Tierra–Luna y de los demás planetas.
+- **Estilos de anotaciones** en el panel izquierdo: cambia color, tamaño y
+  fuente del punteo/distancia y de la información de Tierra–Luna y planetaria.
 - **Quitar comparación:** elimina el conjunto desde el menú.
 - **Imágenes personalizadas:** permite elegir una fotografía propia para
   cada cuerpo.

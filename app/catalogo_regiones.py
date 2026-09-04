@@ -19,7 +19,7 @@ SRS_ARCHIVO = (
 )
 SRS_ACTUAL = "https://services.swpc.noaa.gov/text/srs.txt"
 HEK_EVENTOS = "https://api.helioviewer.org/v2/events/"
-AGENTE = "Ne-notoka-HelioRegla/1.2.0"
+AGENTE = "Ne-notoka-HelioRegla/1.3.0"
 
 
 class ErrorCatalogoRegiones(RuntimeError):

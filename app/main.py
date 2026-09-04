@@ -13,6 +13,7 @@ from PySide6.QtGui import (
     QPainter,
     QPen,
     QPixmap,
+    QFont,
 )
 from ajuste_parcial import ajustar_limbo_parcial
 from acerca_de import DialogoAcercaDe
@@ -81,6 +82,7 @@ from PySide6.QtWidgets import (
     QToolBar,
     QToolButton,
     QVBoxLayout,
+    QFontComboBox,
     QWidget,
 )
 
@@ -104,7 +106,7 @@ def ruta_base_aplicacion():
 RUTA_PROYECTO = ruta_base_aplicacion()
 RUTA_LOGO = RUTA_PROYECTO / "assets" / "logo_ne_notoka.png"
 RUTA_ICONO = RUTA_PROYECTO / "assets" / "icono_ne_notoka.ico"
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 
 
 class VisorSolar(QGraphicsView):
@@ -689,8 +691,12 @@ class VentanaPrincipal(QMainWindow):
             type=str,
         ) or None
         self.color_distancia_tierra_luna = self.ajustes.value(
-            "comparaciones/color_distancia",
-            "#FFB81C",
+            "anotaciones/distancia/color",
+            self.ajustes.value(
+                "comparaciones/color_distancia",
+                "#FFB81C",
+                type=str,
+            ),
             type=str,
         )
         self.mostrar_linea_distancia = self.ajustes.value(
@@ -699,8 +705,12 @@ class VentanaPrincipal(QMainWindow):
             type=bool,
         )
         self.color_informacion_planetas = self.ajustes.value(
-            "comparaciones/color_informacion_planetas",
-            "#FFFFFF",
+            "anotaciones/informacion_planetaria/color",
+            self.ajustes.value(
+                "comparaciones/color_informacion_planetas",
+                "#FFFFFF",
+                type=str,
+            ),
             type=str,
         )
 
@@ -729,17 +739,99 @@ class VentanaPrincipal(QMainWindow):
             18,
             type=int,
         )
+        self.fuente_regla = self.ajustes.value(
+            "regla/fuente",
+            "Century Gothic",
+            type=str,
+        )
 
-        self.color_anotaciones = self.ajustes.value(
+        color_anotaciones_base = self.ajustes.value(
             "anotaciones/color",
             "#ff3dbb",
             type=str,
         )
-        self.tamano_anotaciones = self.ajustes.value(
+        tamano_anotaciones_base = self.ajustes.value(
             "anotaciones/tamano",
             28,
             type=int,
         )
+        fuente_anotaciones_base = self.ajustes.value(
+            "anotaciones/fuente",
+            "Century Gothic",
+            type=str,
+        )
+
+        self.color_protuberancia = self.ajustes.value(
+            "anotaciones/protuberancia/color",
+            color_anotaciones_base,
+            type=str,
+        )
+        self.tamano_protuberancia = self.ajustes.value(
+            "anotaciones/protuberancia/tamano",
+            tamano_anotaciones_base,
+            type=int,
+        )
+        self.fuente_protuberancia = self.ajustes.value(
+            "anotaciones/protuberancia/fuente",
+            fuente_anotaciones_base,
+            type=str,
+        )
+        self.color_filamento = self.ajustes.value(
+            "anotaciones/filamento/color",
+            color_anotaciones_base,
+            type=str,
+        )
+        self.tamano_filamento = self.ajustes.value(
+            "anotaciones/filamento/tamano",
+            tamano_anotaciones_base,
+            type=int,
+        )
+        self.fuente_filamento = self.ajustes.value(
+            "anotaciones/filamento/fuente",
+            fuente_anotaciones_base,
+            type=str,
+        )
+        self.color_ra = self.ajustes.value(
+            "anotaciones/ra/color",
+            color_anotaciones_base,
+            type=str,
+        )
+        self.tamano_ra = self.ajustes.value(
+            "anotaciones/ra/tamano",
+            tamano_anotaciones_base,
+            type=int,
+        )
+        self.fuente_ra = self.ajustes.value(
+            "anotaciones/ra/fuente",
+            fuente_anotaciones_base,
+            type=str,
+        )
+        self.tamano_distancia_tierra_luna = self.ajustes.value(
+            "anotaciones/distancia/tamano",
+            20,
+            type=int,
+        )
+        self.fuente_distancia_tierra_luna = self.ajustes.value(
+            "anotaciones/distancia/fuente",
+            "Century Gothic",
+            type=str,
+        )
+        self.tamano_informacion_planetas = self.ajustes.value(
+            "anotaciones/informacion_planetaria/tamano",
+            20,
+            type=int,
+        )
+        self.fuente_informacion_planetas = self.ajustes.value(
+            "anotaciones/informacion_planetaria/fuente",
+            "Century Gothic",
+            type=str,
+        )
+
+        # Alias de compatibilidad para proyectos y actualizaciones anteriores.
+        self.color_anotaciones = self.color_ra
+        self.tamano_anotaciones = self.tamano_ra
+        self.fuente_anotaciones = self.fuente_ra
+        self.controles_estilo = {}
         self.rotacion_catalogo = self.ajustes.value(
             "catalogo/rotacion",
             0.0,
@@ -1095,35 +1187,15 @@ class VentanaPrincipal(QMainWindow):
             self.cambiar_configuracion_regla
         )
 
-        self.boton_color_anotaciones = QPushButton(
-            "Color de anotaciones"
+        self.selector_fuente_regla = QFontComboBox()
+        self.selector_fuente_regla.setCurrentFont(
+            QFont(self.fuente_regla)
         )
-        self.boton_color_anotaciones.clicked.connect(
-            self.seleccionar_color_anotaciones
+        self.selector_fuente_regla.currentFontChanged.connect(
+            self.cambiar_fuente_regla
         )
-        self.boton_color_anotaciones.setStyleSheet(
-            f"border: 2px solid {self.color_anotaciones};"
-        )
-
-        self.selector_tamano_anotaciones = QComboBox()
-        tamanos = (12, 16, 20, 24, 28, 32, 40, 48, 56, 64)
-
-        for tamano in tamanos:
-            self.selector_tamano_anotaciones.addItem(
-                f"Texto {tamano} px",
-                tamano,
-            )
-
-        indice_tamano = (
-            self.selector_tamano_anotaciones.findData(
-                self.tamano_anotaciones
-            )
-        )
-        self.selector_tamano_anotaciones.setCurrentIndex(
-            max(0, indice_tamano)
-        )
-        self.selector_tamano_anotaciones.currentIndexChanged.connect(
-            self.cambiar_tamano_anotaciones
+        self.selector_fuente_regla.setToolTip(
+            "Tipo de fuente de la regla solar"
         )
 
         self.boton_finalizar_parcial = QPushButton(
@@ -1167,6 +1239,22 @@ class VentanaPrincipal(QMainWindow):
         self.selector_grosor.currentIndexChanged.connect(
             self.cambiar_grosor_limbo
         )
+
+        self.seccion_estilos = QLabel("ESTILOS DE ANOTACIONES")
+        self.seccion_estilos.setObjectName("seccionPanel")
+
+        self.filas_estilo = {}
+        for clave, clave_texto in (
+            ("protuberancia", "prominence_style"),
+            ("filamento", "filament_style"),
+            ("ra", "active_region_style"),
+            ("distancia", "distance_style"),
+            ("informacion_planetaria", "planet_info_style"),
+        ):
+            self.filas_estilo[clave] = self.crear_fila_estilo(
+                clave,
+                tr(clave_texto),
+            )
 
         self.etiqueta_medicion = QLabel("Calibración pendiente")
         self.etiqueta_medicion.setWordWrap(True)
@@ -1251,24 +1339,19 @@ class VentanaPrincipal(QMainWindow):
         fila_regla_2.setSpacing(8)
         fila_regla_2.addWidget(self.boton_color_regla)
         fila_regla_2.addWidget(self.selector_grosor_regla)
+        fila_regla_2.addWidget(self.selector_fuente_regla)
         fila_regla_2.addWidget(self.selector_tamano_regla)
         panel_layout.addLayout(fila_regla_2)
-
-        fila_anotaciones = QHBoxLayout()
-        fila_anotaciones.setSpacing(8)
-        fila_anotaciones.addWidget(
-            self.boton_color_anotaciones
-        )
-        fila_anotaciones.addWidget(
-            self.selector_tamano_anotaciones
-        )
-        panel_layout.addLayout(fila_anotaciones)
 
         fila_estilo = QHBoxLayout()
         fila_estilo.setSpacing(8)
         fila_estilo.addWidget(self.boton_color_limbo, 1)
         fila_estilo.addWidget(self.selector_grosor)
         panel_layout.addLayout(fila_estilo)
+
+        panel_layout.addWidget(self.seccion_estilos)
+        for fila in self.filas_estilo.values():
+            panel_layout.addWidget(fila)
 
         panel_layout.addWidget(self.etiqueta_archivo)
         panel_layout.addWidget(self.etiqueta_medicion)
@@ -1301,6 +1384,116 @@ class VentanaPrincipal(QMainWindow):
         distribucion.addWidget(zona_visor, 1)
 
         self.setCentralWidget(contenedor)
+
+    def _valores_estilo(self, clave):
+        atributos = {
+            "protuberancia": (
+                "color_protuberancia",
+                "tamano_protuberancia",
+                "fuente_protuberancia",
+            ),
+            "filamento": (
+                "color_filamento",
+                "tamano_filamento",
+                "fuente_filamento",
+            ),
+            "ra": (
+                "color_ra",
+                "tamano_ra",
+                "fuente_ra",
+            ),
+            "distancia": (
+                "color_distancia_tierra_luna",
+                "tamano_distancia_tierra_luna",
+                "fuente_distancia_tierra_luna",
+            ),
+            "informacion_planetaria": (
+                "color_informacion_planetas",
+                "tamano_informacion_planetas",
+                "fuente_informacion_planetas",
+            ),
+        }
+        nombres = atributos[clave]
+        return tuple(getattr(self, nombre) for nombre in nombres)
+
+    def crear_fila_estilo(self, clave, titulo):
+        contenedor = QWidget()
+        distribucion = QVBoxLayout(contenedor)
+        distribucion.setContentsMargins(0, 2, 0, 2)
+        distribucion.setSpacing(4)
+
+        etiqueta = QLabel(titulo)
+        etiqueta.setObjectName("tituloEstilo")
+        distribucion.addWidget(etiqueta)
+
+        fila = QHBoxLayout()
+        fila.setSpacing(6)
+
+        color, tamano, familia = self._valores_estilo(clave)
+        boton_color = QPushButton("Color")
+        boton_color.setObjectName("botonColor")
+        boton_color.setFixedWidth(72)
+        boton_color.setToolTip("Seleccionar color de esta anotación")
+        boton_color.setStyleSheet(
+            f"border: 2px solid {color};"
+        )
+        boton_color.clicked.connect(
+            lambda comprobado=False, clave=clave:
+            self.seleccionar_color_estilo(clave)
+        )
+
+        selector_fuente = QFontComboBox()
+        selector_fuente.setCurrentFont(QFont(familia))
+        selector_fuente.setToolTip("Seleccionar tipo de fuente")
+        selector_fuente.currentFontChanged.connect(
+            lambda fuente, clave=clave:
+            self.cambiar_fuente_estilo(clave, fuente)
+        )
+
+        selector_tamano = QComboBox()
+        for valor in (
+            10,
+            12,
+            14,
+            16,
+            18,
+            20,
+            24,
+            28,
+            32,
+            40,
+            48,
+            56,
+            64,
+            72,
+        ):
+            selector_tamano.addItem(
+                tr("text_px", value=valor),
+                valor,
+            )
+        indice = selector_tamano.findData(tamano)
+        selector_tamano.setCurrentIndex(max(0, indice))
+        selector_tamano.setToolTip(
+            "Tamaño del texto en píxeles de la imagen"
+        )
+        selector_tamano.currentIndexChanged.connect(
+            lambda indice, clave=clave:
+            self.cambiar_tamano_estilo(clave, indice)
+        )
+
+        fila.addWidget(boton_color)
+        fila.addWidget(selector_fuente, 1)
+        fila.addWidget(selector_tamano)
+        distribucion.addLayout(fila)
+
+        controles = {
+            "etiqueta": etiqueta,
+            "color": boton_color,
+            "fuente": selector_fuente,
+            "tamano": selector_tamano,
+        }
+        self.controles_estilo[clave] = controles
+        return contenedor
 
     def createPopupMenu(self):
         return None
@@ -1437,30 +1630,9 @@ class VentanaPrincipal(QMainWindow):
             self.opcion_linea_distancia
         )
 
-        self.accion_color_distancia = QAction(
-            "Color de la distancia…",
-            self,
-        )
-        self.accion_color_distancia.triggered.connect(
-            self.seleccionar_color_distancia_tierra_luna
-        )
-        self.menu_comparaciones.addAction(
-            self.accion_color_distancia
-        )
         self.menu_comparaciones.addSeparator()
         self.menu_comparaciones.addMenu(
             self.menu_anadir_planeta
-        )
-
-        self.accion_color_informacion_planetas = QAction(
-            "Color de información planetaria…",
-            self,
-        )
-        self.accion_color_informacion_planetas.triggered.connect(
-            self.seleccionar_color_informacion_planetas
-        )
-        self.menu_comparaciones.addAction(
-            self.accion_color_informacion_planetas
         )
 
         self.accion_imagen_tierra = QAction(
@@ -1749,10 +1921,32 @@ class VentanaPrincipal(QMainWindow):
             )
         )
         self.boton_color_regla.setText(tr("ruler_color"))
-        self.boton_color_anotaciones.setText(
-            tr("annotation_color")
-        )
         self.boton_color_limbo.setText(tr("outline_color"))
+        self.seccion_estilos.setText(tr("annotation_styles"))
+        titulos_estilo = {
+            "protuberancia": "prominence_style",
+            "filamento": "filament_style",
+            "ra": "active_region_style",
+            "distancia": "distance_style",
+            "informacion_planetaria": "planet_info_style",
+        }
+        for clave, controles in self.controles_estilo.items():
+            controles["etiqueta"].setText(
+                tr(titulos_estilo[clave])
+            )
+            controles["color"].setText(tr("color_button"))
+            controles["color"].setToolTip(
+                tr("annotation_color_tooltip")
+            )
+            controles["fuente"].setToolTip(
+                tr("font_type_tooltip")
+            )
+            controles["tamano"].setToolTip(
+                tr("annotation_size_tooltip")
+            )
+        self.selector_fuente_regla.setToolTip(
+            tr("ruler_font_tooltip")
+        )
         self.boton_finalizar_parcial.setText(
             tr("finish_partial")
         )
@@ -1804,12 +1998,6 @@ class VentanaPrincipal(QMainWindow):
         )
         self.opcion_linea_distancia.setText(
             tr("show_distance_line")
-        )
-        self.accion_color_distancia.setText(
-            tr("distance_color")
-        )
-        self.accion_color_informacion_planetas.setText(
-            tr("planet_info_color")
         )
         self.accion_imagen_tierra.setText(
             tr("custom_earth")
@@ -1883,10 +2071,12 @@ class VentanaPrincipal(QMainWindow):
                 tr("line_px", value=valor),
             )
 
-        for selector in (
-            self.selector_tamano_regla,
-            self.selector_tamano_anotaciones,
-        ):
+        selectores_tamano = [self.selector_tamano_regla]
+        selectores_tamano.extend(
+            controles["tamano"]
+            for controles in self.controles_estilo.values()
+        )
+        for selector in selectores_tamano:
             for indice in range(selector.count()):
                 selector.setItemText(
                     indice,
@@ -2267,15 +2457,12 @@ class VentanaPrincipal(QMainWindow):
             },
             "limbo": datos_circulo,
             "protuberancias": [
-                {
-                    "x": medicion.punta.x(),
-                    "y": medicion.punta.y(),
-                }
+                medicion.estado()
                 for medicion in self.mediciones_protuberancias
                 if not medicion.eliminada
             ],
             "filamentos": [
-                medicion.estado()
+                medicion.estado_completo()
                 for medicion in self.mediciones_filamentos
                 if not medicion.eliminada
             ],
@@ -2320,8 +2507,37 @@ class VentanaPrincipal(QMainWindow):
             "estilo": {
                 "color_limbo": self.color_limbo,
                 "grosor_limbo": self.grosor_limbo,
+                "color_protuberancia": self.color_protuberancia,
+                "tamano_protuberancia": self.tamano_protuberancia,
+                "fuente_protuberancia": self.fuente_protuberancia,
+                "color_filamento": self.color_filamento,
+                "tamano_filamento": self.tamano_filamento,
+                "fuente_filamento": self.fuente_filamento,
+                "color_ra": self.color_ra,
+                "tamano_ra": self.tamano_ra,
+                "fuente_ra": self.fuente_ra,
+                "color_distancia_tierra_luna": (
+                    self.color_distancia_tierra_luna
+                ),
+                "tamano_distancia_tierra_luna": (
+                    self.tamano_distancia_tierra_luna
+                ),
+                "fuente_distancia_tierra_luna": (
+                    self.fuente_distancia_tierra_luna
+                ),
+                "color_informacion_planetas": (
+                    self.color_informacion_planetas
+                ),
+                "tamano_informacion_planetas": (
+                    self.tamano_informacion_planetas
+                ),
+                "fuente_informacion_planetas": (
+                    self.fuente_informacion_planetas
+                ),
+                # Claves conservadas para proyectos anteriores.
                 "color_anotaciones": self.color_anotaciones,
                 "tamano_anotaciones": self.tamano_anotaciones,
+                "fuente_anotaciones": self.fuente_anotaciones,
             },
             "regla": {
                 "visible": self.regla_solar is not None,
@@ -2330,6 +2546,7 @@ class VentanaPrincipal(QMainWindow):
                 "color": self.color_regla,
                 "grosor": self.grosor_regla,
                 "tamano_texto": self.tamano_regla,
+                "fuente": self.fuente_regla,
             },
         }
 
@@ -2468,16 +2685,90 @@ class VentanaPrincipal(QMainWindow):
                     self.grosor_limbo,
                 )
             )
-            self.color_anotaciones = estilo.get(
+            color_anotaciones = estilo.get(
                 "color_anotaciones",
-                self.color_anotaciones,
+                self.color_ra,
             )
-            self.tamano_anotaciones = int(
+            tamano_anotaciones = int(
                 estilo.get(
                     "tamano_anotaciones",
-                    self.tamano_anotaciones,
+                    self.tamano_ra,
                 )
             )
+            fuente_anotaciones = estilo.get(
+                "fuente_anotaciones",
+                self.fuente_ra,
+            )
+            self.color_protuberancia = estilo.get(
+                "color_protuberancia",
+                color_anotaciones,
+            )
+            self.tamano_protuberancia = int(
+                estilo.get(
+                    "tamano_protuberancia",
+                    tamano_anotaciones,
+                )
+            )
+            self.fuente_protuberancia = estilo.get(
+                "fuente_protuberancia",
+                fuente_anotaciones,
+            )
+            self.color_filamento = estilo.get(
+                "color_filamento",
+                color_anotaciones,
+            )
+            self.tamano_filamento = int(
+                estilo.get(
+                    "tamano_filamento",
+                    tamano_anotaciones,
+                )
+            )
+            self.fuente_filamento = estilo.get(
+                "fuente_filamento",
+                fuente_anotaciones,
+            )
+            self.color_ra = estilo.get(
+                "color_ra",
+                color_anotaciones,
+            )
+            self.tamano_ra = int(
+                estilo.get("tamano_ra", tamano_anotaciones)
+            )
+            self.fuente_ra = estilo.get(
+                "fuente_ra",
+                fuente_anotaciones,
+            )
+            self.color_distancia_tierra_luna = estilo.get(
+                "color_distancia_tierra_luna",
+                self.color_distancia_tierra_luna,
+            )
+            self.tamano_distancia_tierra_luna = int(
+                estilo.get(
+                    "tamano_distancia_tierra_luna",
+                    self.tamano_distancia_tierra_luna,
+                )
+            )
+            self.fuente_distancia_tierra_luna = estilo.get(
+                "fuente_distancia_tierra_luna",
+                self.fuente_distancia_tierra_luna,
+            )
+            self.color_informacion_planetas = estilo.get(
+                "color_informacion_planetas",
+                self.color_informacion_planetas,
+            )
+            self.tamano_informacion_planetas = int(
+                estilo.get(
+                    "tamano_informacion_planetas",
+                    self.tamano_informacion_planetas,
+                )
+            )
+            self.fuente_informacion_planetas = estilo.get(
+                "fuente_informacion_planetas",
+                self.fuente_informacion_planetas,
+            )
+            self.color_anotaciones = self.color_ra
+            self.tamano_anotaciones = self.tamano_ra
+            self.fuente_anotaciones = self.fuente_ra
 
             calibracion = datos.get("calibracion", {})
             self.escala_equipo_km = calibracion.get(
@@ -2598,15 +2889,34 @@ class VentanaPrincipal(QMainWindow):
 
             for punto in datos.get("protuberancias", []):
                 if self.visor.circulo_limbo is not None:
-                    self.crear_medicion_protuberancia(
+                    medicion = self.crear_medicion_protuberancia(
                         punto["x"],
                         punto["y"],
                     )
+                    if (
+                        medicion is not None
+                        and "texto_x" in punto
+                        and "texto_y" in punto
+                    ):
+                        medicion.establecer_desplazamiento_etiqueta(
+                            punto["texto_x"],
+                            punto["texto_y"],
+                        )
 
             escala = self._escala_activa()
 
             if escala is not None:
-                for puntos in datos.get("filamentos", []):
+                for datos_filamento in datos.get(
+                    "filamentos",
+                    [],
+                ):
+                    if isinstance(datos_filamento, dict):
+                        puntos = datos_filamento.get(
+                            "puntos",
+                            [],
+                        )
+                    else:
+                        puntos = datos_filamento
                     medicion = MedicionFilamento(
                         self.visor.escena,
                         [
@@ -2618,10 +2928,20 @@ class VentanaPrincipal(QMainWindow):
                         al_eliminar=(
                             self.eliminar_filamento_individual
                         ),
-                        color=self.color_anotaciones,
-                        tamano_texto=self.tamano_anotaciones,
+                        color=self.color_filamento,
+                        tamano_texto=self.tamano_filamento,
+                        familia_fuente=self.fuente_filamento,
                         antes_cambiar=self.registrar_estado,
                     )
+                    if (
+                        isinstance(datos_filamento, dict)
+                        and "texto_x" in datos_filamento
+                        and "texto_y" in datos_filamento
+                    ):
+                        medicion.establecer_desplazamiento_etiqueta(
+                            datos_filamento["texto_x"],
+                            datos_filamento["texto_y"],
+                        )
                     self.mediciones_filamentos.append(
                         medicion
                     )
@@ -2706,7 +3026,10 @@ class VentanaPrincipal(QMainWindow):
                             datos_comparacion["y"],
                         ),
                         separacion_real,
-                        self.tamano_anotaciones,
+                        self.tamano_informacion_planetas,
+                        familia_fuente=(
+                            self.fuente_informacion_planetas
+                        ),
                         imagen_tierra=(
                             datos_comparacion.get(
                                 "imagen_tierra",
@@ -2724,6 +3047,30 @@ class VentanaPrincipal(QMainWindow):
                             mostrar_linea_distancia
                         ),
                         color_informacion=color_informacion,
+                        tamano_distancia=(
+                            datos_comparacion.get(
+                                "tamano_distancia",
+                                self.tamano_distancia_tierra_luna,
+                            )
+                        ),
+                        familia_fuente_distancia=(
+                            datos_comparacion.get(
+                                "familia_fuente_distancia",
+                                self.fuente_distancia_tierra_luna,
+                            )
+                        ),
+                        tamano_informacion=(
+                            datos_comparacion.get(
+                                "tamano_informacion",
+                                self.tamano_informacion_planetas,
+                            )
+                        ),
+                        familia_fuente_informacion=(
+                            datos_comparacion.get(
+                                "familia_fuente_informacion",
+                                self.fuente_informacion_planetas,
+                            )
+                        ),
                         al_eliminar=(
                             self.eliminar_comparacion_tierra_luna
                         ),
@@ -2775,6 +3122,10 @@ class VentanaPrincipal(QMainWindow):
                     self.tamano_regla,
                 )
             )
+            self.fuente_regla = datos_regla.get(
+                "fuente",
+                self.fuente_regla,
+            )
             self._sincronizar_controles_proyecto()
 
             if (
@@ -2824,10 +3175,6 @@ class VentanaPrincipal(QMainWindow):
             (self.selector_maximo_regla, self.maximo_regla),
             (self.selector_grosor_regla, self.grosor_regla),
             (self.selector_tamano_regla, self.tamano_regla),
-            (
-                self.selector_tamano_anotaciones,
-                self.tamano_anotaciones,
-            ),
             (self.selector_grosor, self.grosor_limbo),
         )
 
@@ -2842,12 +3189,28 @@ class VentanaPrincipal(QMainWindow):
         self.boton_color_limbo.setStyleSheet(
             f"border: 2px solid {self.color_limbo};"
         )
-        self.boton_color_anotaciones.setStyleSheet(
-            f"border: 2px solid {self.color_anotaciones};"
-        )
         self.boton_color_regla.setStyleSheet(
             f"border: 2px solid {self.color_regla};"
         )
+        self.selector_fuente_regla.blockSignals(True)
+        self.selector_fuente_regla.setCurrentFont(
+            QFont(self.fuente_regla)
+        )
+        self.selector_fuente_regla.blockSignals(False)
+        for clave, controles in self.controles_estilo.items():
+            color, tamano, familia = self._valores_estilo(clave)
+            controles["color"].setStyleSheet(
+                f"border: 2px solid {color};"
+            )
+            controles["fuente"].blockSignals(True)
+            controles["fuente"].setCurrentFont(QFont(familia))
+            controles["fuente"].blockSignals(False)
+            selector = controles["tamano"]
+            indice = selector.findData(tamano)
+            if indice >= 0:
+                selector.blockSignals(True)
+                selector.setCurrentIndex(indice)
+                selector.blockSignals(False)
 
     def anadir_comparacion_tierra_luna(
         self,
@@ -2903,17 +3266,26 @@ class VentanaPrincipal(QMainWindow):
                 escala,
                 posicion,
                 bool(separacion_real),
-                self.tamano_anotaciones,
+                self.tamano_informacion_planetas,
+                familia_fuente=self.fuente_informacion_planetas,
                 imagen_tierra=self.ruta_imagen_tierra,
                 imagen_luna=self.ruta_imagen_luna,
                 color_distancia=(
                     self.color_distancia_tierra_luna
+                ),
+                tamano_distancia=self.tamano_distancia_tierra_luna,
+                familia_fuente_distancia=(
+                    self.fuente_distancia_tierra_luna
                 ),
                 mostrar_linea_distancia=(
                     self.mostrar_linea_distancia
                 ),
                 color_informacion=(
                     self.color_informacion_planetas
+                ),
+                tamano_informacion=self.tamano_informacion_planetas,
+                familia_fuente_informacion=(
+                    self.fuente_informacion_planetas
                 ),
                 al_eliminar=(
                     self.eliminar_comparacion_tierra_luna
@@ -2952,29 +3324,7 @@ class VentanaPrincipal(QMainWindow):
             .establecer_linea_distancia_visible(visible)
 
     def seleccionar_color_distancia_tierra_luna(self):
-        color = QColorDialog.getColor(
-            QColor(self.color_distancia_tierra_luna),
-            self,
-            tr("select_distance_color"),
-        )
-
-        if not color.isValid():
-            return
-
-        if self.comparacion_tierra_luna is not None:
-            self.registrar_estado()
-
-        self.color_distancia_tierra_luna = color.name()
-        self.ajustes.setValue(
-            "comparaciones/color_distancia",
-            self.color_distancia_tierra_luna,
-        )
-
-        if self.comparacion_tierra_luna is not None:
-            self.comparacion_tierra_luna\
-                .establecer_color_distancia(
-                    self.color_distancia_tierra_luna
-                )
+        self.seleccionar_color_estilo("distancia")
 
     def quitar_comparacion_tierra_luna(self):
         if self.comparacion_tierra_luna is not None:
@@ -2993,37 +3343,7 @@ class VentanaPrincipal(QMainWindow):
         )
 
     def seleccionar_color_informacion_planetas(self):
-        color = QColorDialog.getColor(
-            QColor(self.color_informacion_planetas),
-            self,
-            tr("select_planet_info_color"),
-        )
-
-        if not color.isValid():
-            return
-
-        if (
-            self.comparacion_tierra_luna is not None
-            or self.comparaciones_planetas
-        ):
-            self.registrar_estado()
-
-        self.color_informacion_planetas = color.name()
-        self.ajustes.setValue(
-            "comparaciones/color_informacion_planetas",
-            self.color_informacion_planetas,
-        )
-
-        if self.comparacion_tierra_luna is not None:
-            self.comparacion_tierra_luna\
-                .establecer_color_informacion(
-                    self.color_informacion_planetas
-                )
-
-        for comparacion in self.comparaciones_planetas.values():
-            comparacion.establecer_color_informacion(
-                self.color_informacion_planetas
-            )
+        self.seleccionar_color_estilo("informacion_planetaria")
 
     def anadir_comparacion_planeta(self, planeta):
         escala = self._escala_activa()
@@ -3054,7 +3374,8 @@ class VentanaPrincipal(QMainWindow):
             planeta,
             escala,
             posicion,
-            self.tamano_anotaciones,
+            self.tamano_informacion_planetas,
+            familia_fuente=self.fuente_informacion_planetas,
             imagen=self.rutas_imagenes_planetas.get(planeta),
             color_informacion=(
                 self.color_informacion_planetas
@@ -3188,9 +3509,10 @@ class VentanaPrincipal(QMainWindow):
             planeta,
             escala,
             QPointF(datos["x"], datos["y"]),
-            self.tamano_anotaciones,
+            self.tamano_informacion_planetas,
             imagen=imagen,
             color_informacion=color_informacion,
+            familia_fuente=self.fuente_informacion_planetas,
             al_eliminar=self.eliminar_comparacion_planeta,
             antes_cambiar=self.registrar_estado,
         )
@@ -3330,6 +3652,7 @@ class VentanaPrincipal(QMainWindow):
             self.color_regla,
             self.grosor_regla,
             self.tamano_regla,
+            self.fuente_regla,
         )
         self.boton_regla.setText(tr("hide_ruler"))
         self.actualizar_regla_solar()
@@ -3393,8 +3716,17 @@ class VentanaPrincipal(QMainWindow):
                 self.color_regla,
                 self.grosor_regla,
                 self.tamano_regla,
+                self.fuente_regla,
             )
             self.actualizar_regla_solar()
+
+    def cambiar_fuente_regla(self, fuente):
+        self.fuente_regla = fuente.family()
+        self.ajustes.setValue(
+            "regla/fuente",
+            self.fuente_regla,
+        )
+        self.cambiar_configuracion_regla()
 
     def actualizar_regla_solar(self):
         if (
@@ -3423,76 +3755,170 @@ class VentanaPrincipal(QMainWindow):
             self.visor.elemento_imagen.boundingRect(),
         )
 
-    def seleccionar_color_anotaciones(self):
+    def _atributos_estilo(self, clave):
+        nombres = {
+            "protuberancia": (
+                "color_protuberancia",
+                "tamano_protuberancia",
+                "fuente_protuberancia",
+            ),
+            "filamento": (
+                "color_filamento",
+                "tamano_filamento",
+                "fuente_filamento",
+            ),
+            "ra": (
+                "color_ra",
+                "tamano_ra",
+                "fuente_ra",
+            ),
+            "distancia": (
+                "color_distancia_tierra_luna",
+                "tamano_distancia_tierra_luna",
+                "fuente_distancia_tierra_luna",
+            ),
+            "informacion_planetaria": (
+                "color_informacion_planetas",
+                "tamano_informacion_planetas",
+                "fuente_informacion_planetas",
+            ),
+        }
+        return nombres[clave]
+
+    def _guardar_estilo(self, clave):
+        color, tamano, fuente = self._valores_estilo(clave)
+        prefijo = {
+            "protuberancia": "anotaciones/protuberancia",
+            "filamento": "anotaciones/filamento",
+            "ra": "anotaciones/ra",
+            "distancia": "anotaciones/distancia",
+            "informacion_planetaria": (
+                "anotaciones/informacion_planetaria"
+            ),
+        }[clave]
+        self.ajustes.setValue(f"{prefijo}/color", color)
+        self.ajustes.setValue(f"{prefijo}/tamano", tamano)
+        self.ajustes.setValue(f"{prefijo}/fuente", fuente)
+
+        if clave == "ra":
+            self.color_anotaciones = self.color_ra
+            self.tamano_anotaciones = self.tamano_ra
+            self.fuente_anotaciones = self.fuente_ra
+            self.ajustes.setValue("anotaciones/color", color)
+            self.ajustes.setValue("anotaciones/tamano", tamano)
+            self.ajustes.setValue("anotaciones/fuente", fuente)
+        elif clave == "distancia":
+            self.ajustes.setValue(
+                "comparaciones/color_distancia",
+                color,
+            )
+        elif clave == "informacion_planetaria":
+            self.ajustes.setValue(
+                "comparaciones/color_informacion_planetas",
+                color,
+            )
+
+    def seleccionar_color_estilo(self, clave):
+        color_actual, _, _ = self._valores_estilo(clave)
+        claves_dialogo = {
+            "protuberancia": "select_prominence_color",
+            "filamento": "select_filament_color",
+            "ra": "select_active_region_color",
+            "distancia": "select_distance_color",
+            "informacion_planetaria": "select_planet_info_color",
+        }
         color = QColorDialog.getColor(
-            self.color_anotaciones,
+            QColor(color_actual),
             self,
-            tr("select_annotation_color"),
+            tr(claves_dialogo[clave]),
         )
 
         if not color.isValid():
             return
 
-        self.color_anotaciones = color.name()
-        self.ajustes.setValue(
-            "anotaciones/color",
-            self.color_anotaciones,
-        )
-        self.boton_color_anotaciones.setStyleSheet(
-            f"border: 2px solid {self.color_anotaciones};"
-        )
-        self.aplicar_estilo_anotaciones()
+        nombre_color, _, _ = self._atributos_estilo(clave)
+        setattr(self, nombre_color, color.name())
+        self._guardar_estilo(clave)
+        controles = self.controles_estilo.get(clave)
+        if controles is not None:
+            controles["color"].setStyleSheet(
+                f"border: 2px solid {color.name()};"
+            )
+        self.aplicar_estilo_estilo(clave)
 
-    def cambiar_tamano_anotaciones(self, indice):
-        tamano = self.selector_tamano_anotaciones.itemData(
-            indice
-        )
-
+    def cambiar_tamano_estilo(self, clave, indice):
+        selector = self.controles_estilo[clave]["tamano"]
+        tamano = selector.itemData(indice)
         if tamano is None:
             return
+        _, nombre_tamano, _ = self._atributos_estilo(clave)
+        setattr(self, nombre_tamano, int(tamano))
+        self._guardar_estilo(clave)
+        self.aplicar_estilo_estilo(clave)
 
-        self.tamano_anotaciones = int(tamano)
-        self.ajustes.setValue(
-            "anotaciones/tamano",
-            self.tamano_anotaciones,
-        )
-        self.aplicar_estilo_anotaciones()
+    def cambiar_fuente_estilo(self, clave, fuente):
+        _, _, nombre_fuente = self._atributos_estilo(clave)
+        setattr(self, nombre_fuente, fuente.family())
+        self._guardar_estilo(clave)
+        self.aplicar_estilo_estilo(clave)
+
+    def aplicar_estilo_estilo(self, clave):
+        color, tamano, familia = self._valores_estilo(clave)
+
+        if clave == "protuberancia":
+            for medicion in self.mediciones_protuberancias:
+                medicion.establecer_estilo(color, tamano, familia)
+        elif clave == "filamento":
+            mediciones = list(self.mediciones_filamentos)
+            if self.filamento_en_curso is not None:
+                mediciones.append(self.filamento_en_curso)
+            for medicion in mediciones:
+                medicion.establecer_estilo(color, tamano, familia)
+        elif clave == "ra":
+            for etiqueta in self.etiquetas_manchas:
+                etiqueta.establecer_estilo(color, tamano, familia)
+            acomodar_etiquetas(self.etiquetas_manchas)
+        elif clave == "distancia":
+            if self.comparacion_tierra_luna is not None:
+                self.comparacion_tierra_luna.establecer_estilo_distancia(
+                    color,
+                    tamano,
+                    familia,
+                )
+        elif clave == "informacion_planetaria":
+            if self.comparacion_tierra_luna is not None:
+                self.comparacion_tierra_luna.establecer_estilo_informacion(
+                    color,
+                    tamano,
+                    familia,
+                )
+            for comparacion in self.comparaciones_planetas.values():
+                comparacion.establecer_estilo_informacion(
+                    color,
+                    tamano,
+                    familia,
+                )
 
     def aplicar_estilo_anotaciones(self):
-        for medicion in self.mediciones_protuberancias:
-            medicion.establecer_estilo(
-                self.color_anotaciones,
-                self.tamano_anotaciones,
-            )
+        for clave in self._atributos_estilo_claves():
+            self.aplicar_estilo_estilo(clave)
 
-        for medicion in self.mediciones_filamentos:
-            medicion.establecer_estilo(
-                self.color_anotaciones,
-                self.tamano_anotaciones,
-            )
+    @staticmethod
+    def _atributos_estilo_claves():
+        return (
+            "protuberancia",
+            "filamento",
+            "ra",
+            "distancia",
+            "informacion_planetaria",
+        )
 
-        if self.filamento_en_curso is not None:
-            self.filamento_en_curso.establecer_estilo(
-                self.color_anotaciones,
-                self.tamano_anotaciones,
-            )
+    # Métodos antiguos conservados para compatibilidad con extensiones.
+    def seleccionar_color_anotaciones(self):
+        self.seleccionar_color_estilo("ra")
 
-        if self.comparacion_tierra_luna is not None:
-            self.comparacion_tierra_luna.establecer_tamano_texto(
-                self.tamano_anotaciones
-            )
-
-        for comparacion in self.comparaciones_planetas.values():
-            comparacion.establecer_tamano_texto(
-                self.tamano_anotaciones
-            )
-
-        for etiqueta in self.etiquetas_manchas:
-            etiqueta.establecer_estilo(
-                self.color_anotaciones,
-                self.tamano_anotaciones,
-            )
-        acomodar_etiquetas(self.etiquetas_manchas)
+    def cambiar_tamano_anotaciones(self, indice):
+        self.cambiar_tamano_estilo("ra", indice)
 
     def _nombre_region_catalogo(self, region):
         lineas = [region.nombre]
@@ -4124,8 +4550,9 @@ class VentanaPrincipal(QMainWindow):
             QPointF(float(x), float(y)),
             nombre,
             self.visor.elemento_imagen.boundingRect(),
-            color=self.color_anotaciones,
-            tamano_texto=self.tamano_anotaciones,
+            color=self.color_ra,
+            tamano_texto=self.tamano_ra,
+            familia_fuente=self.fuente_ra,
             radio=radio,
             ancho=ancho,
             alto=alto,
@@ -4208,14 +4635,16 @@ class VentanaPrincipal(QMainWindow):
                 self.error_limbo_px or 0.0
             ),
             al_eliminar=self.eliminar_medicion_individual,
-            color_anotacion=self.color_anotaciones,
-            tamano_texto=self.tamano_anotaciones,
+            color_anotacion=self.color_protuberancia,
+            tamano_texto=self.tamano_protuberancia,
+            familia_fuente=self.fuente_protuberancia,
             antes_cambiar=self.registrar_estado,
         )
         self.mediciones_protuberancias.append(medicion)
         self.statusBar().showMessage(
             tr("prominence_created")
         )
+        return medicion
 
     def iniciar_medicion_filamento(self):
         self._terminar_modo_mancha()
@@ -4332,8 +4761,9 @@ class VentanaPrincipal(QMainWindow):
                 escala,
                 self.visor.elemento_imagen.boundingRect(),
                 al_eliminar=self.eliminar_filamento_individual,
-                color=self.color_anotaciones,
-                tamano_texto=self.tamano_anotaciones,
+                color=self.color_filamento,
+                tamano_texto=self.tamano_filamento,
+                familia_fuente=self.fuente_filamento,
                 antes_cambiar=self.registrar_estado,
                 finalizada=False,
             )
@@ -4466,16 +4896,13 @@ class VentanaPrincipal(QMainWindow):
             }
 
         mediciones = [
-            {
-                "x": medicion.punta.x(),
-                "y": medicion.punta.y(),
-            }
+            medicion.estado()
             for medicion in self.mediciones_protuberancias
             if not medicion.eliminada
         ]
 
         filamentos = [
-            medicion.estado()
+            medicion.estado_completo()
             for medicion in self.mediciones_filamentos
             if not medicion.eliminada
         ]
@@ -4586,15 +5013,34 @@ class VentanaPrincipal(QMainWindow):
             self.accion_quitar_planetas.setEnabled(False)
 
             for datos in estado["mediciones"]:
-                self.crear_medicion_protuberancia(
+                medicion = self.crear_medicion_protuberancia(
                     datos["x"],
                     datos["y"],
                 )
+                if (
+                    medicion is not None
+                    and "texto_x" in datos
+                    and "texto_y" in datos
+                ):
+                    medicion.establecer_desplazamiento_etiqueta(
+                        datos["texto_x"],
+                        datos["texto_y"],
+                    )
 
             escala = self._escala_activa()
 
             if escala is not None:
-                for puntos in estado.get("filamentos", []):
+                for datos_filamento in estado.get(
+                    "filamentos",
+                    [],
+                ):
+                    if isinstance(datos_filamento, dict):
+                        puntos = datos_filamento.get(
+                            "puntos",
+                            [],
+                        )
+                    else:
+                        puntos = datos_filamento
                     medicion = MedicionFilamento(
                         self.visor.escena,
                         [
@@ -4606,10 +5052,20 @@ class VentanaPrincipal(QMainWindow):
                         al_eliminar=(
                             self.eliminar_filamento_individual
                         ),
-                        color=self.color_anotaciones,
-                        tamano_texto=self.tamano_anotaciones,
+                        color=self.color_filamento,
+                        tamano_texto=self.tamano_filamento,
+                        familia_fuente=self.fuente_filamento,
                         antes_cambiar=self.registrar_estado,
                     )
+                    if (
+                        isinstance(datos_filamento, dict)
+                        and "texto_x" in datos_filamento
+                        and "texto_y" in datos_filamento
+                    ):
+                        medicion.establecer_desplazamiento_etiqueta(
+                            datos_filamento["texto_x"],
+                            datos_filamento["texto_y"],
+                        )
                     self.mediciones_filamentos.append(
                         medicion
                     )
@@ -4694,7 +5150,8 @@ class VentanaPrincipal(QMainWindow):
                             datos_comparacion["y"],
                         ),
                         separacion_real,
-                        self.tamano_anotaciones,
+                        self.tamano_informacion_planetas,
+                        familia_fuente=self.fuente_informacion_planetas,
                         imagen_tierra=(
                             datos_comparacion.get(
                                 "imagen_tierra",
@@ -4712,6 +5169,30 @@ class VentanaPrincipal(QMainWindow):
                             mostrar_linea_distancia
                         ),
                         color_informacion=color_informacion,
+                        tamano_distancia=(
+                            datos_comparacion.get(
+                                "tamano_distancia",
+                                self.tamano_distancia_tierra_luna,
+                            )
+                        ),
+                        familia_fuente_distancia=(
+                            datos_comparacion.get(
+                                "familia_fuente_distancia",
+                                self.fuente_distancia_tierra_luna,
+                            )
+                        ),
+                        tamano_informacion=(
+                            datos_comparacion.get(
+                                "tamano_informacion",
+                                self.tamano_informacion_planetas,
+                            )
+                        ),
+                        familia_fuente_informacion=(
+                            datos_comparacion.get(
+                                "familia_fuente_informacion",
+                                self.fuente_informacion_planetas,
+                            )
+                        ),
                         al_eliminar=(
                             self.eliminar_comparacion_tierra_luna
                         ),

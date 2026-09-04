@@ -41,9 +41,9 @@ nombre de salida ya existe se añade un número.
 ## Guardar un proyecto editable
 
 Pulsa **Guardar proyecto** o **Ctrl + S**. El archivo `.helio` conserva la
-calibración activa, ajuste del limbo, protuberancias, filamentos, colores y
-regla solar. La fotografía no se duplica: el proyecto guarda una referencia a
-su ubicación.
+calibración activa, ajuste del limbo, protuberancias, filamentos, estilos de
+anotación, posiciones de etiquetas y regla solar. La fotografía no se duplica:
+el proyecto guarda una referencia a su ubicación.
 
 Para recuperarlo, pulsa **Abrir proyecto** o **Ctrl + Alt + O**. Si la
 fotografía fue trasladada, HelioRegla solicitará localizarla.
@@ -87,6 +87,8 @@ Al aceptar una calibración por equipo, todas las mediciones existentes se recal
    clic derecho.
 4. Pulsa **Aceptar medición** o **Enter** para finalizar; **Esc** cancela.
 5. Arrastra cualquier punto para afinar el trazado.
+6. Cuando la medición esté terminada, arrastra su texto con el botón izquierdo
+   para colocarlo a un lado y evitar que cubra el filamento.
 
 Al aceptar, los puntos de edición desaparecen y permanecen la curva y su
 resultado. Puedes pulsar otra vez **Medir filamento** para medir todos los
@@ -110,16 +112,17 @@ calcula la longitud siguiendo esa curva.
    medios entre los centros de ambos cuerpos.
 5. Utiliza **Mostrar línea y distancia** para decidir si quieres mostrar el
    punteo y su leyenda, o únicamente los dos cuerpos separados.
-6. Elige **Color de la distancia** para adaptar el contraste a cada fotografía.
+6. Ajusta el color, tamaño y fuente de la distancia desde **Estilos de
+   anotaciones** en el panel izquierdo.
 
 También puedes comenzar directamente con **Mostrar distancia real**: HelioRegla
 creará Tierra–Luna con la separación correspondiente. Para volver a mostrarlas
 juntas, selecciona **Añadir Tierra–Luna**. No es necesario eliminar la
 comparación entre ambos modos.
 
-La opción **Color de información planetaria** modifica el color de los nombres
-y diámetros de todos los cuerpos sin alterar el color independiente de la línea
-de distancia.
+La opción **Información planetaria** dentro de **Estilos de anotaciones**
+modifica el color, tamaño y fuente de los nombres y diámetros de todos los
+cuerpos sin alterar el estilo independiente de la línea de distancia.
 
 El modo compacto facilita comparar diámetros sin ocupar demasiado espacio. El
 modo de distancia real permite apreciar cuánto separa realmente a la Tierra de
@@ -201,11 +204,25 @@ Las líneas de protuberancias y filamentos son discontinuas. Los espacios entre
 segmentos permiten observar la estructura solar debajo del trazado sin perder
 la continuidad visual de la medición.
 
-## Tamaño de las anotaciones
+## Estilos de anotaciones
 
-El selector **Texto N px** expresa el tamaño en píxeles de la fotografía
-original. Por ello, las letras se acercan y alejan junto con la imagen y
-mantienen siempre la misma proporción respecto de las estructuras solares.
+En el panel izquierdo, la sección **Estilos de anotaciones** permite elegir por
+separado el color, la fuente y el tamaño de:
+
+- mediciones de protuberancias;
+- mediciones de filamentos;
+- anotaciones de regiones activas (RA);
+- distancia Tierra–Luna;
+- información planetaria.
+
+El tamaño expresa píxeles de la fotografía original. Por ello, las letras se
+acercan y alejan junto con la imagen y mantienen siempre la misma proporción
+respecto de las estructuras solares. El contorno del limbo también admite
+**0 px** para ocultarlo.
+
+La regla solar tiene sus propios controles de color, grosor, tamaño y fuente.
+Los cambios se aplican inmediatamente a las anotaciones visibles y se
+conservan en los proyectos `.helio`.
 
 Al mostrar la imagen al 100 %, el tamaño en pantalla coincide con el tamaño
 elegido. La exportación conserva exactamente ese tamaño en píxeles, sin

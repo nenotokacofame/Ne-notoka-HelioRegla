@@ -4,7 +4,7 @@
 
 El proceso crea:
 
-`dist_instalador\Ne-notoka_HelioRegla_1.2.0_Setup.exe`
+`dist_instalador\Ne-notoka_HelioRegla_1.3.0_Setup.exe`
 
 Es un instalador bilingüe para Windows 10 y Windows 11 de 64 bits. Instala el
 programa por usuario, no necesita permisos de administrador, crea entradas en
@@ -36,7 +36,7 @@ Code ni las dependencias de desarrollo.
 
 ## Firma digital
 
-La versión 1.2.0 puede distribuirse sin firma, aunque Windows SmartScreen
+La versión 1.3.0 puede distribuirse sin firma, aunque Windows SmartScreen
 podría mostrar una advertencia por ser una aplicación nueva. Una firma de
 código Authenticode podrá incorporarse posteriormente sin modificar el
 programa.

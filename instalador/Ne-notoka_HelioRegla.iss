@@ -1,5 +1,5 @@
 #define MyAppName "Ne-notoka HelioRegla"
-#define MyAppVersion "1.2.0"
+#define MyAppVersion "1.3.0"
 #define MyAppPublisher "David Olivos S. / Ne-notoka Cofame"
 #define MyAppExeName "Ne-notoka HelioRegla.exe"
 
@@ -9,7 +9,7 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-VersionInfoVersion=1.2.0.0
+VersionInfoVersion=1.3.0.0
 VersionInfoCompany=Ne-notoka Cofame
 VersionInfoDescription=Instalador de Ne-notoka HelioRegla
 VersionInfoCopyright=Copyright (c) 2026 David Olivos S.
@@ -21,7 +21,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 OutputDir=..\dist_instalador
-OutputBaseFilename=Ne-notoka_HelioRegla_1.2.0_Setup
+OutputBaseFilename=Ne-notoka_HelioRegla_1.3.0_Setup
 SetupIconFile=..\assets\icono_ne_notoka.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 LicenseFile=..\LICENSE

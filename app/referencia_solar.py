@@ -21,7 +21,7 @@ from i18n import tr
 
 
 HELIOVIEWER_CAPTURA = "https://api.helioviewer.org/v2/takeScreenshot/"
-AGENTE = "Ne-notoka-HelioRegla/1.2.0"
+AGENTE = "Ne-notoka-HelioRegla/1.3.0"
 TAMANO_REFERENCIA = 1024
 ESCALA_REFERENCIA = 2.0
 

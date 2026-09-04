@@ -110,11 +110,19 @@ class ComparacionTierraLuna:
         color_informacion="#FFFFFF",
         al_eliminar=None,
         antes_cambiar=None,
+        familia_fuente="Century Gothic",
+        tamano_distancia=None,
+        familia_fuente_distancia=None,
+        tamano_informacion=None,
+        familia_fuente_informacion=None,
     ):
         self.escena = escena
         self.km_por_pixel = float(km_por_pixel)
         self.separacion_real = bool(separacion_real)
         self.tamano_texto = int(tamano_texto)
+        self.familia_fuente = str(
+            familia_fuente or "Century Gothic"
+        )
         self.imagen_tierra = imagen_tierra
         self.imagen_luna = imagen_luna
         self.color_distancia = color_distancia
@@ -122,6 +130,22 @@ class ComparacionTierraLuna:
             mostrar_linea_distancia
         )
         self.color_informacion = color_informacion
+        self.tamano_distancia = int(
+            tamano_distancia
+            if tamano_distancia is not None
+            else tamano_texto
+        )
+        self.familia_fuente_distancia = str(
+            familia_fuente_distancia or self.familia_fuente
+        )
+        self.tamano_informacion = int(
+            tamano_informacion
+            if tamano_informacion is not None
+            else tamano_texto
+        )
+        self.familia_fuente_informacion = str(
+            familia_fuente_informacion or self.familia_fuente
+        )
         self.al_eliminar = al_eliminar
         self.antes_cambiar = antes_cambiar
         self.eliminada = False
@@ -141,9 +165,11 @@ class ComparacionTierraLuna:
             if elemento.scene() is not None:
                 self.escena.removeItem(elemento)
 
-    def _fuente(self):
-        fuente = QFont("Century Gothic")
-        fuente.setPixelSize(self.tamano_texto)
+    def _fuente(self, tamano=None, familia=None):
+        fuente = QFont(familia or self.familia_fuente)
+        fuente.setPixelSize(
+            int(tamano if tamano is not None else self.tamano_texto)
+        )
         fuente.setBold(True)
         return fuente
 
@@ -154,10 +180,12 @@ class ComparacionTierraLuna:
         x,
         y,
         alinear_derecha=False,
+        tamano=None,
+        familia=None,
     ):
         texto = QGraphicsSimpleTextItem(contenido)
         texto.setBrush(QBrush(QColor(color)))
-        texto.setFont(self._fuente())
+        texto.setFont(self._fuente(tamano, familia))
 
         if alinear_derecha:
             x -= texto.boundingRect().width()
@@ -306,12 +334,16 @@ class ComparacionTierraLuna:
                 x_tierra - radio_tierra - 8,
                 desplazamiento,
                 alinear_derecha=True,
+                tamano=self.tamano_informacion,
+                familia=self.familia_fuente_informacion,
             )
             self._texto(
                 tr("moon_label"),
                 self.color_informacion,
                 x_luna + radio_luna + 8,
                 desplazamiento,
+                tamano=self.tamano_informacion,
+                familia=self.familia_fuente_informacion,
             )
         else:
             self._texto(
@@ -319,6 +351,8 @@ class ComparacionTierraLuna:
                 self.color_informacion,
                 x_tierra - radio_tierra,
                 desplazamiento,
+                tamano=self.tamano_informacion,
+                familia=self.familia_fuente_informacion,
             )
 
         if (
@@ -339,7 +373,9 @@ class ComparacionTierraLuna:
                 tr("distance_label"),
                 self.color_distancia,
                 -distancia_centros * 0.22,
-                -desplazamiento - self.tamano_texto * 1.8,
+                -desplazamiento - self.tamano_distancia * 1.8,
+                tamano=self.tamano_distancia,
+                familia=self.familia_fuente_distancia,
             )
 
         self.grupo.setPos(posicion_escena)
@@ -354,6 +390,34 @@ class ComparacionTierraLuna:
 
     def establecer_tamano_texto(self, tamano):
         self.tamano_texto = int(tamano)
+        self.tamano_distancia = int(tamano)
+        self.tamano_informacion = int(tamano)
+        self.actualizar()
+
+    def establecer_estilo_distancia(
+        self,
+        color,
+        tamano,
+        familia,
+    ):
+        self.color_distancia = str(color)
+        self.tamano_distancia = int(tamano)
+        self.familia_fuente_distancia = str(
+            familia or self.familia_fuente
+        )
+        self.actualizar()
+
+    def establecer_estilo_informacion(
+        self,
+        color,
+        tamano,
+        familia,
+    ):
+        self.color_informacion = str(color)
+        self.tamano_informacion = int(tamano)
+        self.familia_fuente_informacion = str(
+            familia or self.familia_fuente
+        )
         self.actualizar()
 
     def establecer_imagenes(self, tierra=None, luna=None):
@@ -399,6 +463,14 @@ class ComparacionTierraLuna:
                 self.mostrar_linea_distancia
             ),
             "color_informacion": self.color_informacion,
+            "tamano_distancia": self.tamano_distancia,
+            "familia_fuente_distancia": (
+                self.familia_fuente_distancia
+            ),
+            "tamano_informacion": self.tamano_informacion,
+            "familia_fuente_informacion": (
+                self.familia_fuente_informacion
+            ),
         }
 
 
@@ -435,6 +507,7 @@ class ComparacionPlaneta:
         color_informacion="#FFFFFF",
         al_eliminar=None,
         antes_cambiar=None,
+        familia_fuente="Century Gothic",
     ):
         if planeta not in PLANETAS:
             raise ValueError(f"Planeta desconocido: {planeta}")
@@ -443,6 +516,9 @@ class ComparacionPlaneta:
         self.planeta = planeta
         self.km_por_pixel = float(km_por_pixel)
         self.tamano_texto = int(tamano_texto)
+        self.familia_fuente = str(
+            familia_fuente or "Century Gothic"
+        )
         self.imagen = imagen
         self.color_informacion = color_informacion
         self.al_eliminar = al_eliminar
@@ -465,7 +541,7 @@ class ComparacionPlaneta:
                 self.escena.removeItem(elemento)
 
     def _fuente(self):
-        fuente = QFont("Century Gothic")
+        fuente = QFont(self.familia_fuente)
         fuente.setPixelSize(self.tamano_texto)
         fuente.setBold(True)
         return fuente
@@ -690,6 +766,19 @@ class ComparacionPlaneta:
         self.tamano_texto = int(tamano)
         self.actualizar()
 
+    def establecer_estilo_informacion(
+        self,
+        color,
+        tamano,
+        familia,
+    ):
+        self.color_informacion = str(color)
+        self.tamano_texto = int(tamano)
+        self.familia_fuente = str(
+            familia or self.familia_fuente
+        )
+        self.actualizar()
+
     def establecer_imagen(self, imagen=None):
         self.imagen = imagen
         self.actualizar()
@@ -719,4 +808,6 @@ class ComparacionPlaneta:
             "y": posicion.y(),
             "imagen": self.imagen,
             "color_informacion": self.color_informacion,
+            "tamano_informacion": self.tamano_texto,
+            "familia_fuente_informacion": self.familia_fuente,
         }
