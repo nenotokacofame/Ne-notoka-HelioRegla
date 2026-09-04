@@ -8,3 +8,13 @@ dist/
 dist_instalador/
 proyectos/*
 !proyectos/.gitkeep
+/pruebas/
+/ACTUALIZACION_0.11.1.md
+/crear_instalador_windows.bat
+/preparar_licencias_terceros.py
+/Ne-notoka_HelioRegla.spec
+/instalador/
+/licencias_terceros/
+/requirements-instalador.txt
+/scripts/
+/docs/INSTALADOR_WINDOWS.md
